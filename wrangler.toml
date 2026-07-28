@@ -2,7 +2,7 @@ name = "ari-instrumentation"
 main = "src/worker.js"
 compatibility_date = "2025-04-01"
 
-# Shared KV namespace — must match the portfolio's SESSIONS binding
+# Shared KV namespace — must match the portfolio's SESSIONS binding ID
 [[kv_namespaces]]
 binding = "ANALYTICS"
-id = ""  # same namespace ID as portfolio's SESSIONS
+id = ""  # set to the portfolio SESSIONS namespace ID before deploying
