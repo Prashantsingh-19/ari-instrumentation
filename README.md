@@ -5,54 +5,33 @@ Analytics dashboard for Ari — the crab chatbot on [Prashant's portfolio](https
 ## Architecture
 
 ```
-ari-chatbot Worker (portfolio)            ari-instrumentation Worker
-┌──────────────────────┐   KV (ANALYTICS)  ┌──────────────────────┐
-│  /chat handler       │  ──────────────>  │  GET / → dashboard   │
-│  writes log:{ts}:…   │  log events       │  GET /api/analytics  │
-└──────────────────────┘                   │  → aggregates + JSON │
-                                           └──────────────────────┘
+ari-chatbot Worker (portfolio)                  ari-instrumentation Worker
+┌────────────────────────────┐   shared KV      ┌────────────────────────────┐
+│  /chat handler             │  ──────────────>  │  GET /       → dashboard  │
+│  writes log:{ts}:{session} │  SESSIONS ns     │  GET /api/analytics       │
+│  to env.SESSIONS           │  (log:* prefix)  │  → aggregates + JSON      │
+└────────────────────────────┘                  └────────────────────────────┘
 ```
+
+Both workers share the same KV namespace. The portfolio worker uses `env.SESSIONS` (already configured). The instrumentation worker uses `env.ANALYTICS` — both point to the same namespace ID.
 
 ## Setup
 
-### 1. Deploy the worker
+### 1. Deploy
 
-```bash
-wrangler kv:namespace create analytics-logs
-# → copy the returned ID
-```
-
-Paste the ID into `wrangler.toml`:
+Copy the SESSIONS namespace ID from the portfolio's `wrangler.toml` into this repo's `wrangler.toml`:
 
 ```toml
-id = "your-namespace-id-here"
+[[kv_namespaces]]
+binding = "ANALYTICS"
+id = ""  # same ID as the portfolio's SESSIONS binding
 ```
 
 ```bash
 wrangler deploy
 ```
 
-### 2. Instrument the portfolio chatbot
-
-Add the same `ANALYTICS` KV binding to the portfolio's `wrangler.toml`. Then in `ari-worker.js`, add a fire-and-forget log after each chat reply:
-
-```js
-const startTime = Date.now();
-const reply = await callLLM(env, messages, { maxTokens: 150 });
-const latencyMs = Date.now() - startTime;
-
-ctx.waitUntil((async () => {
-  try {
-    await env.ANALYTICS.put(
-      `log:${Date.now()}:${sessionId}`,
-      JSON.stringify({ ts: Date.now(), sessionId, message, reply, latencyMs }),
-      { expirationTtl: 86400 * 30 }
-    );
-  } catch {}
-})());
-```
-
-### 3. Open the dashboard
+### 2. Open the dashboard
 
 Visit `https://ari-instrumentation.your-subdomain.workers.dev/`
 

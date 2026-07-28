@@ -2,8 +2,8 @@ name = "ari-instrumentation"
 main = "src/worker.js"
 compatibility_date = "2025-04-01"
 
-# KV namespace for analytics logs.
-# Must match the KV namespace the ari-chatbot worker writes to.
+# Must point to the same KV namespace as the portfolio's SESSIONS binding.
+# The portfolio ari-worker writes analytics logs to env.SESSIONS with a "log:" prefix.
 [[kv_namespaces]]
 binding = "ANALYTICS"
-id = ""  # ← set this to your KV namespace ID
+id = ""  # ← same namespace ID as the portfolio's SESSIONS binding
