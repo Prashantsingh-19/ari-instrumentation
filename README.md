@@ -1,56 +1,42 @@
 # Ari Instrumentation
 
-Analytics dashboard for Ari — the crab chatbot on [Prashant's portfolio](https://prashantsingh-19.github.io/portfolio/). Tracks visitors, conversations, topics, latency, and common questions.
+Analytics dashboard for Ari. **GitHub Pages** serves the HTML. **Cloudflare Worker** serves the API.
 
 ## Architecture
 
 ```
-ari-chatbot Worker (portfolio)                  ari-instrumentation Worker
-┌────────────────────────────┐   shared KV      ┌────────────────────────────┐
-│  /chat handler             │  ──────────────>  │  GET /       → dashboard  │
-│  writes log:{ts}:{session} │  SESSIONS ns     │  GET /api/analytics       │
-│  to env.SESSIONS           │  (log:* prefix)  │  → aggregates + JSON      │
-└────────────────────────────┘                  └────────────────────────────┘
+GitHub Pages                           Cloudflare Worker
+┌─────────────────┐                    ┌──────────────────────┐
+│  index.html      │  ── fetch ──────>  │  /api/analytics      │
+│  (static)        │  <── JSON ───────  │  reads KV log:* keys │
+└─────────────────┘                    └──────────────────────┘
+                                                │
+                                       shared KV namespace
+                                        (same as portfolio)
 ```
-
-Both workers share the same KV namespace. The portfolio worker uses `env.SESSIONS` (already configured). The instrumentation worker uses `env.ANALYTICS` — both point to the same namespace ID.
 
 ## Setup
 
-### 1. Deploy
+### 1. Worker: deploy the API
 
-Copy the SESSIONS namespace ID from the portfolio's `wrangler.toml` into this repo's `wrangler.toml`:
-
-```toml
-[[kv_namespaces]]
-binding = "ANALYTICS"
-id = ""  # same ID as the portfolio's SESSIONS binding
-```
+Set the KV namespace ID in `wrangler.toml` (same ID as the portfolio's `SESSIONS` binding), then:
 
 ```bash
 wrangler deploy
 ```
 
-### 2. Open the dashboard
+### 2. Dashboard: enable GitHub Pages
 
-Visit `https://ari-instrumentation.your-subdomain.workers.dev/`
+In repo Settings → Pages → Source: **Deploy from branch**, branch: `main`, folder: `/ (root)`.
+
+Dashboard goes live at `https://prashantsingh-19.github.io/ari-instrumentation/`
+
+### 3. Confirm CORS
+
+The worker already returns `Access-Control-Allow-Origin: *` on all responses, so GitHub Pages can fetch from it freely.
 
 ## API
 
 `GET /api/analytics?range=14d` — range: `7d`, `14d`, `30d`, `all`
 
-Returns JSON with KPIs, daily traffic, topic breakdown, top questions, and latency distribution.
-
-## File structure
-
-```
-ari-instrumentation/
-├── src/worker.js       # Cloudflare Worker (dashboard HTML + API endpoint)
-├── wrangler.toml       # Worker config
-├── .gitignore
-└── README.md
-```
-
-## Costs
-
-$0 — Cloudflare free tier. 100k requests/day, 1M KV reads/day.
+Returns KPIs, daily traffic, topic breakdown, top questions, latency distribution.

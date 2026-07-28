@@ -2,8 +2,7 @@ name = "ari-instrumentation"
 main = "src/worker.js"
 compatibility_date = "2025-04-01"
 
-# Must point to the same KV namespace as the portfolio's SESSIONS binding.
-# The portfolio ari-worker writes analytics logs to env.SESSIONS with a "log:" prefix.
+# Shared KV namespace — must match the portfolio's SESSIONS binding
 [[kv_namespaces]]
 binding = "ANALYTICS"
-id = ""  # ← same namespace ID as the portfolio's SESSIONS binding
+id = ""  # same namespace ID as portfolio's SESSIONS
