@@ -1,0 +1,224 @@
+const HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ari — Analytics</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Newsreader:ital@1&display=swap');
+  :root{--bg:#0a0a0e;--bg-raise:#131319;--bg-card:#16161d;--line:#26262f;--text:#eae7e0;--muted:#8a8a95;--coral:#ff6b4a;--coral-dim:#ff6b4a33;--cyan:#5eead4;--cyan-dim:#5eead433;--violet:#a78bfa}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(ellipse 900px 500px at 15% -10%,#1a1420 0%,transparent 60%),radial-gradient(ellipse 800px 500px at 100% 0%,#0d1a1c 0%,transparent 55%),var(--bg);color:var(--text);font-family:'Inter',sans-serif;padding:40px 32px 80px;min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto}
+  .accent{font-family:'Newsreader',serif;font-style:italic;color:var(--coral)}
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:28px;flex-wrap:wrap;gap:16px}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--cyan);text-transform:lowercase;margin-bottom:6px}
+  h1{font-size:30px;font-weight:600;letter-spacing:-0.01em}
+  .range-toggle{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);display:flex;gap:4px;background:var(--bg-raise);padding:4px;border-radius:8px;border:1px solid var(--line);height:fit-content;cursor:pointer}
+  .range-toggle span{padding:6px 12px;border-radius:6px}
+  .range-toggle span.active{background:var(--coral-dim);color:var(--coral)}
+  .equation{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);margin-bottom:18px;letter-spacing:.01em}
+  .equation b{color:var(--text);font-weight:500}
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:34px}
+  .kpi{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--coral)}
+  .kpi:nth-child(2)::before{background:var(--cyan)}
+  .kpi:nth-child(3)::before{background:var(--violet)}
+  .kpi:nth-child(4)::before{background:var(--coral)}
+  .kpi-label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:lowercase;margin-bottom:8px}
+  .kpi-value{font-size:28px;font-weight:600;letter-spacing:-0.02em}
+  .kpi-delta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--cyan);margin-top:4px}
+  .kpi-delta.down{color:var(--coral)}
+  .section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+  .section-head .tag{font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:13px}
+  .section-head h2{font-size:18px;font-weight:600}
+  .grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:32px}
+  .card{background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .card-sub{font-size:12px;color:var(--muted);margin-bottom:16px;font-family:'JetBrains Mono',monospace}
+  .cat-row{margin-bottom:14px}
+  .cat-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+  .cat-name{color:var(--text)}
+  .cat-count{font-family:'JetBrains Mono',monospace;color:var(--muted)}
+  .cat-track{height:8px;background:var(--bg-raise);border-radius:4px;overflow:hidden}
+  .cat-fill{height:100%;border-radius:4px;background:var(--coral)}
+  table{width:100%;border-collapse:collapse}
+  th{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:lowercase;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:12px 10px;border-bottom:1px solid var(--line);font-size:13.5px}
+  tr:last-child td{border-bottom:none}
+  .q-count{font-family:'JetBrains Mono',monospace;color:var(--cyan);text-align:right}
+  .q-topic{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--bg-raise);padding:2px 7px;border-radius:4px;margin-left:8px}
+  .hist{display:flex;align-items:flex-end;gap:6px;height:120px;margin:10px 0 6px}
+  .hist-bar{flex:1;background:var(--cyan-dim);border-top:2px solid var(--cyan);border-radius:3px 3px 0 0;position:relative}
+  .hist-labels{display:flex;gap:6px}
+  .hist-labels span{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+  .footnote{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:18px;margin-top:12px;line-height:1.7}
+  .footnote b{color:var(--text)}
+  svg text{font-family:'JetBrains Mono',monospace}
+  @media(max-width:860px){.kpi-row{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">🦀 ari / instrumentation</div>
+      <h1>How people talk to <span class="accent">Ari</span></h1>
+    </div>
+    <div class="range-toggle">
+      <span data-range="7d">7d</span><span data-range="14d" class="active">14d</span><span data-range="30d">30d</span><span data-range="all">all</span>
+    </div>
+  </header>
+  <div class="equation"><b>Ari</b> = f( visitors, questions, latency ) &nbsp;·&nbsp; sample window: <b>—</b></div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">unique visitors</div><div class="kpi-value">—</div></div>
+    <div class="kpi"><div class="kpi-label">conversations</div><div class="kpi-value">—</div></div>
+    <div class="kpi"><div class="kpi-label">avg latency</div><div class="kpi-value">—</div></div>
+    <div class="kpi"><div class="kpi-label">avg turns / convo</div><div class="kpi-value">—</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-head"><span class="tag">// ∂visitors/∂day</span><h2>Traffic over time</h2></div>
+      <div class="card-sub">unique visitors (line) vs conversations started (bars)</div>
+      <div id="traffic-chart"></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><span class="tag">// bifurcation</span><h2>What they ask about</h2></div>
+      <div class="card-sub">conversations tagged by primary topic</div>
+      <div id="topics-list"></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-head"><span class="tag">// top asked</span><h2>Most common questions</h2></div>
+      <div class="card-sub">clustered by intent, top 6 in window</div>
+      <table><thead><tr><th>Question cluster</th><th style="text-align:right">count</th></tr></thead><tbody id="questions-body"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="section-head"><span class="tag">// response time</span><h2>Latency distribution</h2></div>
+      <div class="card-sub">time to first token, seconds</div>
+      <div class="hist" id="latency-hist"></div>
+      <div class="hist-labels"><span>&lt;1s</span><span>1-2s</span><span>2-3s</span><span>3-4s</span><span>4-5s</span><span>&gt;5s</span></div>
+    </div>
+  </div>
+  <div class="footnote"><b>Note —</b> data is fetched live from <code>/api/analytics</code>, aggregated from analytics logs in KV. Requires the portfolio's <code>ari-worker.js</code> to be instrumented with event logging (see README).</div>
+</div>
+<script>
+const API = '/api/analytics';
+function renderTraffic(daily){const el=document.getElementById('traffic-chart');if(!daily.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No data yet</p>';return}
+const days=daily.map(d=>d.date),visitors=daily.map(d=>d.visitors),convos=daily.map(d=>d.conversations);const w=520,h=190,pad=28;const maxV=Math.max(...visitors,...convos,1);const stepX=(w-pad*2)/Math.max(days.length-1,1);const scaleY=v=>h-pad-(v/maxV)*(h-pad*2);let bars='';const barW=Math.min(stepX*0.5,20);convos.forEach((c,i)=>{const x=pad+i*stepX-barW/2,y=scaleY(c);bars+='<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+(h-pad-y)+'" fill="#ff6b4a" opacity="0.35" rx="2"/>'})
+let points=visitors.map((v,i)=>pad+i*stepX+','+scaleY(v)).join(' ');let dots=visitors.map((v,i)=>'<circle cx="'+(pad+i*stepX)+'" cy="'+scaleY(v)+'" r="3" fill="#5eead4"/>').join('');let gl='';for(let i=0;i<=3;i++){const y=pad+i*(h-pad*2)/3;gl+='<line x1="'+pad+'" y1="'+y+'" x2="'+(w-pad)+'" y2="'+y+'" stroke="#26262f" stroke-width="1"/>'}
+let xl='';const ls=Math.max(1,Math.floor(days.length/5));days.forEach((d,i)=>{if(i%ls===0)xl+='<text x="'+(pad+i*stepX)+'" y="'+(h-4)+'" font-size="9" fill="#8a8a95" text-anchor="middle">'+d+'</text>'})
+el.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">'+gl+bars+'<polyline points="'+points+'" fill="none" stroke="#5eead4" stroke-width="2"/>'+dots+xl+'</svg>'}
+function renderTopics(topics){const el=document.getElementById('topics-list');if(!topics.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No data yet</p>';return}
+const colors=['var(--coral)','var(--cyan)','var(--violet)','var(--coral)','var(--muted)'];el.innerHTML=topics.map((t,i)=>'<div class="cat-row"><div class="cat-top"><span class="cat-name">'+t.name+'</span><span class="cat-count">'+t.pct+'%</span></div><div class="cat-track"><div class="cat-fill" style="width:'+t.pct+'%;background:'+(colors[i]||'var(--coral)')+'"></div></div></div>').join('')}
+function renderQuestions(qs){const tb=document.getElementById('questions-body');tb.innerHTML=qs.map(q=>'<tr><td>'+q.text+' <span class="q-topic">'+q.topic+'</span></td><td class="q-count">'+q.count+'</td></tr>').join('')}
+function renderLatency(buckets){const m=Math.max(...buckets,1);document.getElementById('latency-hist').innerHTML=buckets.map(v=>'<div class="hist-bar" style="height:'+((v/m*100).toFixed(0))+'%"><span style="position:absolute;top:-16px;left:0;right:0;text-align:center;font-family:JetBrains Mono,monospace;font-size:10px;color:#8a8a95">'+v+'</span></div>').join('')}
+function renderKPI(d){const vs=document.querySelectorAll('.kpi-value');vs[0].textContent=d.kpis.uniqueVisitors;vs[1].textContent=d.kpis.conversations;vs[2].textContent=(d.kpis.avgLatencyMs/1000).toFixed(2)+'s';vs[3].textContent=d.kpis.avgTurnsPerConvo.toFixed(1)}
+function renderWindow(d){const el=document.querySelector('.equation');if(el&&d.window.start!=='—')el.innerHTML='<b>Ari</b> = f( visitors, questions, latency ) &nbsp;·&nbsp; sample window: <b>'+d.window.start+' – '+d.window.end+'</b>'}
+async function load(r){document.querySelectorAll('.range-toggle span').forEach(s=>s.classList.remove('active'));document.querySelector('.range-toggle span[data-range="'+r+'"]')?.classList.add('active');try{const res=await fetch(API+'?range='+r);const d=await res.json();renderKPI(d);renderTraffic(d.daily);renderTopics(d.topics);renderQuestions(d.topQuestions);renderLatency(d.latencyBuckets);renderWindow(d)}catch{}}
+document.querySelectorAll('.range-toggle span').forEach(s=>s.addEventListener('click',()=>load(s.dataset.range)));load('14d');
+</script>
+</body>
+</html>`;
+
+function classifyTopic(text) {
+  const t = text.toLowerCase();
+  if (/oncoassist|ocie|onco-dir|onco|soma|etl|pipeline|project|build|architect/i.test(t)) return 'projects';
+  if (/background|physics|mba|career|path|story|pivot|bio|about/i.test(t)) return 'background';
+  if (/hire|recruit|open.?to|role|internship|fit|availability|pm.?role|product.?manager/i.test(t)) return 'hiring';
+  if (/skill|stack|tool|tech|react|next|python|database|sql|cloudflare/i.test(t)) return 'skills';
+  if (/crab|ari|real|chatbot|ai|bot/i.test(t)) return 'off-topic';
+  return 'background';
+}
+
+function aggregateAnalytics(logs, rangeDays) {
+  const now = Date.now();
+  const cutoff = rangeDays ? now - rangeDays * 86400000 : 0;
+  const filtered = cutoff ? logs.filter(l => l.ts >= cutoff) : logs;
+
+  if (!filtered.length) {
+    return {
+      window: { start: '—', end: '—' },
+      kpis: { uniqueVisitors: 0, conversations: 0, avgLatencyMs: 0, avgTurnsPerConvo: 0 },
+      daily: [], topics: [], topQuestions: [], latencyBuckets: [0, 0, 0, 0, 0, 0],
+    };
+  }
+
+  const visitorSet = new Set(filtered.map(l => l.sessionId));
+  const convosSet = new Set(filtered.map(l => l.sessionId));
+  const latencies = filtered.filter(l => l.latencyMs != null).map(l => l.latencyMs);
+  const avgLatencyMs = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+
+  const turnsPerSession = {};
+  filtered.forEach(l => { turnsPerSession[l.sessionId] = (turnsPerSession[l.sessionId] || 0) + 1; });
+  const turnValues = Object.values(turnsPerSession);
+  const avgTurnsPerConvo = turnValues.length ? Math.round((turnValues.reduce((a, b) => a + b, 0) / turnValues.length) * 10) / 10 : 0;
+
+  const dayMap = {}, dayVisitors = {};
+  filtered.forEach(l => {
+    const d = new Date(l.ts).toISOString().slice(5, 10);
+    if (!dayMap[d]) { dayMap[d] = new Set(); dayVisitors[d] = new Set(); }
+    dayMap[d].add(l.sessionId); dayVisitors[d].add(l.sessionId);
+  });
+  const daily = Object.keys(dayMap).sort().map(d => ({
+    date: d, visitors: dayVisitors[d].size, conversations: dayMap[d].size,
+  }));
+
+  const topicCounts = {};
+  filtered.forEach(l => {
+    const topic = l.topic || classifyTopic(l.message);
+    topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+  });
+  const totalTagged = Object.values(topicCounts).reduce((a, b) => a + b, 0);
+  const topicLabels = { projects: 'Projects & technical work', background: 'Background & career path', hiring: 'Hiring / availability fit', skills: 'Skills & toolkit', 'off-topic': 'Off-topic / testing Ari' };
+  const topics = ['projects', 'background', 'hiring', 'skills', 'off-topic'].filter(t => topicCounts[t]).map(t => ({
+    name: topicLabels[t] || t, pct: totalTagged ? Math.round((topicCounts[t] / totalTagged) * 100) : 0,
+  }));
+
+  const qCounts = {};
+  filtered.forEach(l => { const n = l.message.trim().toLowerCase(); qCounts[n] = (qCounts[n] || 0) + 1; });
+  const topQuestions = Object.entries(qCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([text]) => {
+    const sample = filtered.find(l => l.message.toLowerCase() === text);
+    return { text, topic: sample ? sample.topic || classifyTopic(text) : classifyTopic(text), count: qCounts[text] };
+  });
+
+  const buckets = [0, 0, 0, 0, 0, 0];
+  latencies.forEach(ms => { const s = ms / 1000; if (s < 1) buckets[0]++; else if (s < 2) buckets[1]++; else if (s < 3) buckets[2]++; else if (s < 4) buckets[3]++; else if (s < 5) buckets[4]++; else buckets[5]++; });
+  const latencyMax = Math.max(...buckets, 1);
+  const latencyBuckets = buckets.map(v => Math.round((v / latencyMax) * 100));
+
+  const ts = filtered.map(l => l.ts).sort((a, b) => a - b);
+  return {
+    window: { start: ts.length ? new Date(ts[0]).toISOString().slice(0, 10) : '—', end: ts.length ? new Date(ts[ts.length - 1]).toISOString().slice(0, 10) : '—' },
+    kpis: { uniqueVisitors: visitorSet.size, conversations: convosSet.size, avgLatencyMs, avgTurnsPerConvo },
+    daily, topics, topQuestions, latencyBuckets,
+  };
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS' } });
+    }
+    const url = new URL(request.url);
+
+    if (url.pathname === '/' || url.pathname === '/dashboard') {
+      return new Response(HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+
+    if (url.pathname === '/api/analytics') {
+      const rangeParam = url.searchParams.get('range') || '14d';
+      const rangeDays = rangeParam === 'all' ? null : rangeParam === '7d' ? 7 : rangeParam === '30d' ? 30 : 14;
+      try {
+        const keys = await env.ANALYTICS.list({ prefix: 'log:' });
+        const values = await Promise.all(keys.keys.map(k => env.ANALYTICS.get(k.name)));
+        const data = aggregateAnalytics(values.filter(Boolean).map(JSON.parse), rangeDays);
+        return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      }
+    }
+
+    return new Response('Not found', { status: 404 });
+  },
+};

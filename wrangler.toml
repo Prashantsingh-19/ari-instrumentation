@@ -1,0 +1,9 @@
+name = "ari-instrumentation"
+main = "src/worker.js"
+compatibility_date = "2025-04-01"
+
+# KV namespace for analytics logs.
+# Must match the KV namespace the ari-chatbot worker writes to.
+[[kv_namespaces]]
+binding = "ANALYTICS"
+id = ""  # ← set this to your KV namespace ID
