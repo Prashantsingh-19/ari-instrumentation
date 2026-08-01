@@ -94,12 +94,17 @@
       <table><thead><tr><th>Question cluster</th><th style="text-align:right">count</th></tr></thead><tbody id="questions-body"></tbody></table>
     </div>
     <div class="card">
+      <div class="section-head"><span class="tag">// ???</span><h2>Couldn't answer</h2></div>
+      <div class="card-sub">questions Ari flagged as unfound</div>
+      <table><thead><tr><th>Question</th><th style="text-align:right">count</th></tr></thead><tbody id="unanswered-body"></tbody></table>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom: 32px;">
       <div class="section-head"><span class="tag">// response time</span><h2>Latency distribution</h2></div>
       <div class="card-sub">time to first token, seconds</div>
       <div class="hist" id="latency-hist"></div>
       <div class="hist-labels"><span>&lt;1s</span><span>1-2s</span><span>2-3s</span><span>3-4s</span><span>4-5s</span><span>&gt;5s</span></div>
     </div>
-  </div>
   <div class="footnote"><b>Note —</b> data fetched live from the Cloudflare Worker API. The worker reads aggregated analytics logs from KV.</div>
 </div>
 
@@ -131,6 +136,12 @@ function renderTopics(topics) {
 
 function renderQuestions(qs) { document.getElementById('questions-body').innerHTML = qs.map(q => '<tr><td>' + q.text + ' <span class="q-topic">' + q.topic + '</span></td><td class="q-count">' + q.count + '</td></tr>').join(''); }
 
+function renderUnanswered(qs) {
+  const el = document.getElementById('unanswered-body');
+  if (!qs || !qs.length) { el.innerHTML = '<tr><td style="color:var(--muted)">No unanswered questions yet</td><td class="q-count">—</td></tr>'; return; }
+  el.innerHTML = qs.map(q => '<tr><td>' + q.text + '</td><td class="q-count">' + q.count + '</td></tr>').join('');
+}
+
 function renderLatency(buckets) {
   const m = Math.max(...buckets, 1);
   document.getElementById('latency-hist').innerHTML = buckets.map(v => '<div class="hist-bar" style="height:' + ((v / m * 100).toFixed(0)) + '%"><span style="position:absolute;top:-16px;left:0;right:0;text-align:center;font-family:JetBrains Mono,monospace;font-size:10px;color:#8a8a95">' + v + '</span></div>').join('');
@@ -143,7 +154,7 @@ function renderWindow(d) { const el = document.querySelector('.equation'); if (e
 async function load(r) {
   document.querySelectorAll('.range-toggle span').forEach(s => s.classList.remove('active'));
   document.querySelector('.range-toggle span[data-range="' + r + '"]')?.classList.add('active');
-  try { const res = await fetch(API + '?range=' + r); const d = await res.json(); renderKPI(d); renderTraffic(d.daily); renderTopics(d.topics); renderQuestions(d.topQuestions); renderLatency(d.latencyBuckets); renderWindow(d); } catch {}
+  try { const res = await fetch(API + '?range=' + r); const d = await res.json(); renderKPI(d); renderTraffic(d.daily); renderTopics(d.topics); renderQuestions(d.topQuestions); renderUnanswered(d.unansweredQuestions); renderLatency(d.latencyBuckets); renderWindow(d); } catch {}
 }
 
 document.querySelectorAll('.range-toggle span').forEach(s => s.addEventListener('click', () => load(s.dataset.range)));

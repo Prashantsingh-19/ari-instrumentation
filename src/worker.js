@@ -17,11 +17,11 @@ function aggregateAnalytics(logs, rangeDays) {
     return {
       window: { start: '—', end: '—' },
       kpis: { uniqueVisitors: 0, conversations: 0, avgLatencyMs: 0, avgTurnsPerConvo: 0 },
-      daily: [], topics: [], topQuestions: [], latencyBuckets: [0, 0, 0, 0, 0, 0],
+      daily: [], topics: [], topQuestions: [], unansweredQuestions: [], latencyBuckets: [0, 0, 0, 0, 0, 0],
     };
   }
 
-  const visitorSet = new Set(filtered.map(l => l.sessionId));
+  const visitorSet = new Set(filtered.map(l => l.visitorId || l.sessionId));
   const convosSet = new Set(filtered.map(l => l.sessionId));
   const latencies = filtered.filter(l => l.latencyMs != null).map(l => l.latencyMs);
   const avgLatencyMs = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
@@ -35,7 +35,8 @@ function aggregateAnalytics(logs, rangeDays) {
   filtered.forEach(l => {
     const d = new Date(l.ts).toISOString().slice(5, 10);
     if (!dayMap[d]) { dayMap[d] = new Set(); dayVisitors[d] = new Set(); }
-    dayMap[d].add(l.sessionId); dayVisitors[d].add(l.sessionId);
+    dayMap[d].add(l.sessionId);
+    dayVisitors[d].add(l.visitorId || l.sessionId);
   });
   const daily = Object.keys(dayMap).sort().map(d => ({
     date: d, visitors: dayVisitors[d].size, conversations: dayMap[d].size,
@@ -59,6 +60,13 @@ function aggregateAnalytics(logs, rangeDays) {
     return { text, topic: sample ? sample.topic || classifyTopic(text) : classifyTopic(text), count: qCounts[text] };
   });
 
+  const unanswered = {};
+  filtered.filter(l => l.found === false).forEach(l => {
+    const n = l.message.trim().toLowerCase();
+    unanswered[n] = (unanswered[n] || 0) + 1;
+  });
+  const unansweredQuestions = Object.entries(unanswered).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([text, count]) => ({ text, count }));
+
   const buckets = [0, 0, 0, 0, 0, 0];
   latencies.forEach(ms => { const s = ms / 1000; if (s < 1) buckets[0]++; else if (s < 2) buckets[1]++; else if (s < 3) buckets[2]++; else if (s < 4) buckets[3]++; else if (s < 5) buckets[4]++; else buckets[5]++; });
   const latencyMax = Math.max(...buckets, 1);
@@ -68,7 +76,8 @@ function aggregateAnalytics(logs, rangeDays) {
   return {
     window: { start: ts.length ? new Date(ts[0]).toISOString().slice(0, 10) : '—', end: ts.length ? new Date(ts[ts.length - 1]).toISOString().slice(0, 10) : '—' },
     kpis: { uniqueVisitors: visitorSet.size, conversations: convosSet.size, avgLatencyMs, avgTurnsPerConvo },
-    daily, topics, topQuestions, latencyBuckets,
+    daily, topics, topQuestions, latencyBuckets, unansweredQuestions,
+    _visitorIds: visitorSet,
   };
 }
 
@@ -84,9 +93,16 @@ export default {
       const rangeParam = url.searchParams.get('range') || '14d';
       const rangeDays = rangeParam === 'all' ? null : rangeParam === '7d' ? 7 : rangeParam === '30d' ? 30 : 14;
       try {
-        const keys = await env.ANALYTICS.list({ prefix: 'log:' });
-        const values = await Promise.all(keys.keys.map(k => env.ANALYTICS.get(k.name)));
+        const [logKeys, vidKeys] = await Promise.all([
+          env.ANALYTICS.list({ prefix: 'log:' }),
+          env.ANALYTICS.list({ prefix: 'vid:' }),
+        ]);
+        const values = await Promise.all(logKeys.keys.map(k => env.ANALYTICS.get(k.name)));
         const data = aggregateAnalytics(values.filter(Boolean).map(JSON.parse), rangeDays);
+        // Merge page-view-only visitors (vid:* keys) into unique visitor count
+        const allVisitors = new Set(vidKeys.keys.map(k => k.name.replace('vid:', '')));
+        Array.from(data._visitorIds || []).forEach(id => allVisitors.add(id));
+        data.kpis.uniqueVisitors = allVisitors.size;
         return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
       } catch (err) {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });

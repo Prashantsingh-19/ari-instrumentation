@@ -5,4 +5,4 @@ compatibility_date = "2025-04-01"
 # Shared KV namespace — must match the portfolio's SESSIONS binding ID
 [[kv_namespaces]]
 binding = "ANALYTICS"
-id = ""  # set to the portfolio SESSIONS namespace ID before deploying
+id = "143e974b20fa4156804ee85e0a0e5ed4"
