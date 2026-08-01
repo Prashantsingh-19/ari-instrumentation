@@ -75,12 +75,18 @@
     <div class="kpi"><div class="kpi-label">avg latency</div><div class="kpi-value">—</div></div>
     <div class="kpi"><div class="kpi-label">avg turns / convo</div><div class="kpi-value">—</div></div>
   </div>
-  <div class="grid-2">
+<div class="grid-2">
     <div class="card">
-      <div class="section-head"><span class="tag">// ∂visitors/∂day</span><h2>Traffic over time</h2></div>
-      <div class="card-sub">unique visitors (line) vs conversations started (bars)</div>
-      <div id="traffic-chart"></div>
+      <div class="section-head"><span class="tag">// bifurcation</span><h2>What they ask about</h2></div>
+      <div class="card-sub">conversations tagged by primary topic</div>
+      <div id="topics-list"></div>
     </div>
+    <div class="card">
+      <div class="section-head"><span class="tag">// 👍👎</span><h2>Feedback</h2></div>
+      <div class="card-sub">thumbs up/down and recent reviews</div>
+      <div id="feedback-content"></div>
+    </div>
+  </div>
     <div class="card">
       <div class="section-head"><span class="tag">// bifurcation</span><h2>What they ask about</h2></div>
       <div class="card-sub">conversations tagged by primary topic</div>
@@ -142,6 +148,22 @@ function renderUnanswered(qs) {
   el.innerHTML = qs.map(q => '<tr><td>' + q.text + '</td><td class="q-count">' + q.count + '</td></tr>').join('');
 }
 
+function renderFeedback(fb) {
+  const el = document.getElementById('feedback-content');
+  if (!fb || !fb.total) { el.innerHTML = '<p style="color:var(--muted);font-size:13px">No feedback yet</p>'; return; }
+  const upPct = fb.total ? Math.round(fb.thumbsUp / fb.total * 100) : 0;
+  const downPct = fb.total ? Math.round(fb.thumbsDown / fb.total * 100) : 0;
+  let html = '<div style="display:flex;gap:20px;margin-bottom:14px;font-size:13px">';
+  html += '<div><span style="color:var(--cyan);font-weight:600">' + fb.thumbsUp + '</span> 👍</div>';
+  html += '<div><span style="color:var(--coral);font-weight:600">' + fb.thumbsDown + '</span> 👎</div>';
+  html += '</div>';
+  if (fb.recentReviews && fb.recentReviews.length) {
+    html += '<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);margin-bottom:6px">recent reviews</div>';
+    html += fb.recentReviews.map(r => '<div style="font-size:12px;color:var(--text);margin-bottom:6px;padding:6px 8px;background:var(--bg-raise);border-radius:6px">' + r + '</div>').join('');
+  }
+  el.innerHTML = html;
+}
+
 function renderLatency(buckets) {
   const m = Math.max(...buckets, 1);
   document.getElementById('latency-hist').innerHTML = buckets.map(v => '<div class="hist-bar" style="height:' + ((v / m * 100).toFixed(0)) + '%"><span style="position:absolute;top:-16px;left:0;right:0;text-align:center;font-family:JetBrains Mono,monospace;font-size:10px;color:#8a8a95">' + v + '</span></div>').join('');
@@ -154,7 +176,7 @@ function renderWindow(d) { const el = document.querySelector('.equation'); if (e
 async function load(r) {
   document.querySelectorAll('.range-toggle span').forEach(s => s.classList.remove('active'));
   document.querySelector('.range-toggle span[data-range="' + r + '"]')?.classList.add('active');
-  try { const res = await fetch(API + '?range=' + r); const d = await res.json(); renderKPI(d); renderTraffic(d.daily); renderTopics(d.topics); renderQuestions(d.topQuestions); renderUnanswered(d.unansweredQuestions); renderLatency(d.latencyBuckets); renderWindow(d); } catch {}
+  try { const res = await fetch(API + '?range=' + r); const d = await res.json(); renderKPI(d); renderTraffic(d.daily); renderTopics(d.topics); renderQuestions(d.topQuestions); renderUnanswered(d.unansweredQuestions); renderFeedback(d.feedback); renderLatency(d.latencyBuckets); renderWindow(d); } catch {}
 }
 
 document.querySelectorAll('.range-toggle span').forEach(s => s.addEventListener('click', () => load(s.dataset.range)));

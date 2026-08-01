@@ -1,6 +1,6 @@
 function classifyTopic(text) {
   const t = text.toLowerCase();
-  if (/oncoassist|ocie|onco-dir|onco|soma|etl|pipeline|project|build|architect/i.test(t)) return 'projects';
+  if (/oncoassist|ocie|onco-dir|onco|soma|etl|pipeline|project|build|architect|finspark|garch|ai.os/i.test(t)) return 'projects';
   if (/background|physics|mba|career|path|story|pivot|bio|about/i.test(t)) return 'background';
   if (/hire|recruit|open.?to|role|internship|fit|availability|pm.?role|product.?manager/i.test(t)) return 'hiring';
   if (/skill|stack|tool|tech|react|next|python|database|sql|cloudflare/i.test(t)) return 'skills';
@@ -18,6 +18,7 @@ function aggregateAnalytics(logs, rangeDays) {
       window: { start: '—', end: '—' },
       kpis: { uniqueVisitors: 0, conversations: 0, avgLatencyMs: 0, avgTurnsPerConvo: 0 },
       daily: [], topics: [], topQuestions: [], unansweredQuestions: [], latencyBuckets: [0, 0, 0, 0, 0, 0],
+      feedback: { thumbsUp: 0, thumbsDown: 0, total: 0, recentReviews: [] },
     };
   }
 
@@ -76,9 +77,24 @@ function aggregateAnalytics(logs, rangeDays) {
   return {
     window: { start: ts.length ? new Date(ts[0]).toISOString().slice(0, 10) : '—', end: ts.length ? new Date(ts[ts.length - 1]).toISOString().slice(0, 10) : '—' },
     kpis: { uniqueVisitors: visitorSet.size, conversations: convosSet.size, avgLatencyMs, avgTurnsPerConvo },
-    daily, topics, topQuestions, latencyBuckets, unansweredQuestions,
+    daily, topics, topQuestions, unansweredQuestions, latencyBuckets,
     _visitorIds: visitorSet,
   };
+}
+
+function aggregateFeedback(fbList, rangeDays) {
+  const now = Date.now();
+  const cutoff = rangeDays ? now - rangeDays * 86400000 : 0;
+  const filtered = cutoff ? fbList.filter(f => f.ts >= cutoff) : fbList;
+  let up = 0, down = 0;
+  const reviews = [];
+  filtered.forEach(f => {
+    if (f.rating === 'up') up++;
+    else if (f.rating === 'down') down++;
+    if (f.review) reviews.push({ text: f.review, ts: f.ts });
+  });
+  reviews.sort((a, b) => b.ts - a.ts);
+  return { thumbsUp: up, thumbsDown: down, total: up + down, recentReviews: reviews.slice(0, 5).map(r => r.text) };
 }
 
 export default {
@@ -93,13 +109,18 @@ export default {
       const rangeParam = url.searchParams.get('range') || '14d';
       const rangeDays = rangeParam === 'all' ? null : rangeParam === '7d' ? 7 : rangeParam === '30d' ? 30 : 14;
       try {
-        const [logKeys, vidKeys] = await Promise.all([
+        const [logKeys, vidKeys, fbKeys] = await Promise.all([
           env.ANALYTICS.list({ prefix: 'log:' }),
           env.ANALYTICS.list({ prefix: 'vid:' }),
+          env.ANALYTICS.list({ prefix: 'fb:' }),
         ]);
-        const values = await Promise.all(logKeys.keys.map(k => env.ANALYTICS.get(k.name)));
-        const data = aggregateAnalytics(values.filter(Boolean).map(JSON.parse), rangeDays);
-        // Merge page-view-only visitors (vid:* keys) into unique visitor count
+        const [logValues, fbValues] = await Promise.all([
+          Promise.all(logKeys.keys.map(k => env.ANALYTICS.get(k.name))),
+          Promise.all(fbKeys.keys.map(k => env.ANALYTICS.get(k.name))),
+        ]);
+        const data = aggregateAnalytics(logValues.filter(Boolean).map(JSON.parse), rangeDays);
+        const feedback = aggregateFeedback(fbValues.filter(Boolean).map(JSON.parse), rangeDays);
+        data.feedback = feedback;
         const allVisitors = new Set(vidKeys.keys.map(k => k.name.replace('vid:', '')));
         Array.from(data._visitorIds || []).forEach(id => allVisitors.add(id));
         data.kpis.uniqueVisitors = allVisitors.size;
