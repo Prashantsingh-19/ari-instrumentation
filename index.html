@@ -154,8 +154,8 @@ function renderFeedback(fb) {
   const upPct = fb.total ? Math.round(fb.thumbsUp / fb.total * 100) : 0;
   const downPct = fb.total ? Math.round(fb.thumbsDown / fb.total * 100) : 0;
   let html = '<div style="display:flex;gap:20px;margin-bottom:14px;font-size:13px">';
-  html += '<div><span style="color:var(--cyan);font-weight:600">' + fb.thumbsUp + '</span> 👍</div>';
-  html += '<div><span style="color:var(--coral);font-weight:600">' + fb.thumbsDown + '</span> 👎</div>';
+  html += '<div><span style="color:var(--cyan);font-weight:600">' + fb.thumbsUp + '</span> helpful</div>';
+  html += '<div><span style="color:var(--coral);font-weight:600">' + fb.thumbsDown + '</span> not helpful</div>';
   html += '</div>';
   if (fb.recentReviews && fb.recentReviews.length) {
     html += '<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--muted);margin-bottom:6px">recent reviews</div>';
