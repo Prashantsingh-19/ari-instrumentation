@@ -18,6 +18,7 @@ function aggregateAnalytics(logs, rangeDays) {
       window: { start: '—', end: '—' },
       kpis: { uniqueVisitors: 0, conversations: 0, avgLatencyMs: 0, avgTurnsPerConvo: 0 },
       daily: [], topics: [], topQuestions: [], unansweredQuestions: [], latencyBuckets: [0, 0, 0, 0, 0, 0],
+      modelMix: [],
       feedback: { thumbsUp: 0, thumbsDown: 0, total: 0, recentReviews: [] },
     };
   }
@@ -73,11 +74,32 @@ function aggregateAnalytics(logs, rangeDays) {
   const latencyMax = Math.max(...buckets, 1);
   const latencyBuckets = buckets.map(v => Math.round((v / latencyMax) * 100));
 
+  const modelCounts = {};
+  filtered.forEach(l => {
+    if (!l.model) return;
+    modelCounts[l.model] = (modelCounts[l.model] || 0) + 1;
+  });
+  const modelLabels = {
+    'gpt-oss-120b': 'Cloudflare gpt-oss-120b',
+    'glm-4.7-flash': 'Cloudflare GLM-4.7-Flash',
+    'deepseek-v4-pro': 'NVIDIA DeepSeek V4 Pro',
+    'nemotron-ultra': 'OpenRouter Nemotron Ultra',
+    'gemma-4-26b': 'OpenRouter Gemma 4 26B',
+  };
+  const totalTaggedModel = Object.values(modelCounts).reduce((a, b) => a + b, 0);
+  const modelMix = Object.entries(modelCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([model, count]) => ({
+      model: modelLabels[model] || model,
+      count,
+      pct: totalTaggedModel ? Math.round((count / totalTaggedModel) * 100) : 0,
+    }));
+
   const ts = filtered.map(l => l.ts).sort((a, b) => a - b);
   return {
     window: { start: ts.length ? new Date(ts[0]).toISOString().slice(0, 10) : '—', end: ts.length ? new Date(ts[ts.length - 1]).toISOString().slice(0, 10) : '—' },
     kpis: { uniqueVisitors: visitorSet.size, conversations: convosSet.size, avgLatencyMs, avgTurnsPerConvo },
-    daily, topics, topQuestions, unansweredQuestions, latencyBuckets,
+    daily, topics, topQuestions, unansweredQuestions, latencyBuckets, modelMix,
     _visitorIds: visitorSet,
   };
 }

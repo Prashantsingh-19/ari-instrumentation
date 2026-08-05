@@ -260,6 +260,12 @@
     </div>
   </div>
 
+  <div class="card card-full">
+    <div class="section-head"><span class="tag">// models</span><h2>Which LLM answered</h2></div>
+    <div class="card-sub">share of replies served by each model tier</div>
+    <div id="modelmix-content"></div>
+  </div>
+
   <div class="footnote"><b>Note —</b> data fetched live from the Cloudflare Worker API. The worker reads aggregated analytics logs from KV.</div>
 </div>
 
@@ -316,6 +322,13 @@ function renderFeedback(fb) {
   el.innerHTML = html;
 }
 
+function renderModelMix(mix) {
+  const el = document.getElementById('modelmix-content');
+  if (!mix || !mix.length) { el.innerHTML = '<p style="color:#8a8080;font-size:13px">No model data yet</p>'; return; }
+  const colors = ['var(--rust)','#C8BFA8','#8a8080','#4a4842','var(--ink-light)'];
+  el.innerHTML = mix.map((m, i) => '<div class="cat-row"><div class="cat-top"><span class="cat-name">' + m.model + '</span><span class="cat-count">' + m.count + ' · ' + m.pct + '%</span></div><div class="cat-track"><div class="cat-fill" style="width:' + m.pct + '%;background:' + (colors[i] || 'var(--rust)') + '"></div></div></div>').join('');
+}
+
 function renderLatency(buckets) {
   const m = Math.max(...buckets, 1);
   document.getElementById('latency-hist').innerHTML = buckets.map(v => '<div class="hist-bar" style="height:' + ((v / m * 100).toFixed(0)) + '%"><span style="position:absolute;top:-15px;left:0;right:0;text-align:center;font-family:JetBrains Mono,monospace;font-size:9px;color:#8a8680">' + v + '</span></div>').join('');
@@ -346,6 +359,7 @@ async function load(r) {
     renderQuestions(d.topQuestions);
     renderUnanswered(d.unansweredQuestions);
     renderFeedback(d.feedback);
+    renderModelMix(d.modelMix);
     renderLatency(d.latencyBuckets);
     renderWindow(d);
   } catch {}
