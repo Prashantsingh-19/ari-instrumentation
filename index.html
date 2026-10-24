@@ -457,7 +457,7 @@ function renderFeedback(fb) {
 }
 
 function renderFeed(items) {
-  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.found ? '' : '<span class="down">no KB match</span>') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + (r.reply.length >= 280 ? '…' : '') + '</div></div>').join('') : empty('No conversations in this window');
+  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.found ? '' : '<span class="down">no KB match</span>') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + '</div></div>').join('') : empty('No conversations in this window');
   document.querySelectorAll('.feed-item').forEach(el => el.addEventListener('click', () => el.classList.toggle('open')));
 }
 

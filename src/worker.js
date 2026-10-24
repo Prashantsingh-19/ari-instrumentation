@@ -264,7 +264,7 @@ export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Se
 
   const recent = cur.slice(-30).reverse().map(l => ({
     ts: l.ts, session: String(l.sessionId).slice(0, 6), visitor: String(l.visitorId || '').slice(0, 6),
-    message: l.message, reply: (l.reply || '').slice(0, 280), found: l.found !== false,
+    message: l.message, reply: (l.reply || '').slice(0, 4000), found: l.found !== false,
     model: modelLabels[l.model] || l.model || '—', latencyMs: l.latencyMs,
   }));
 
