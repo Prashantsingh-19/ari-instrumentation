@@ -457,7 +457,7 @@ function renderFeedback(fb) {
 }
 
 function renderFeed(items) {
-  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.found ? '' : '<span class="down">no KB match</span>') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + '</div></div>').join('') : empty('No conversations in this window');
+  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.topScore != null ? '<span class="' + (r.match === 'strong' ? '' : 'down') + '">KB ' + esc(r.match) + ' ' + r.topScore.toFixed(2) + '</span>' : (r.found ? '' : '<span class="down">no KB match</span>')) + (r.sources && r.sources.length ? '<span>from ' + esc(r.sources.map(x => x.split(':')[0]).join(', ')) + '</span>' : '') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + '</div></div>').join('') : empty('No conversations in this window');
   document.querySelectorAll('.feed-item').forEach(el => el.addEventListener('click', () => el.classList.toggle('open')));
 }
 
@@ -546,7 +546,7 @@ function renderStatus(d, err) {
     '<span>window <b>' + m.windowStart + ' → ' + m.windowEnd + '</b></span>' +
     '<span>' + m.storedLogs + ' logs stored' + (m.truncated ? ' (showing latest 900)' : '') + '</span>' +
     '<span>updated ' + new Date(m.generatedAt).toLocaleTimeString('en-IN', { hour12: false }) + ' · auto-refresh 60s</span>';
-  $('footnote').innerHTML = '<b>Note —</b> data is read live from Cloudflare KV (no caching). Chat logs expire after ' + m.retentionDays + ' days, so 30d is the full history and has no previous period to compare against. Deltas compare against the previous window of equal length. Topics come from keyword rules in <code>src/worker.js</code>. Page-visit tracking began ' + (m.trackingSince ? ist(m.trackingSince) + ' IST' : 'with this release') + '; earlier periods only have Ari chats. Bots and link-preview crawlers are dropped.';
+  $('footnote').innerHTML = '<b>Note —</b> data is read live from Cloudflare KV (no caching). Chat logs expire after ' + m.retentionDays + ' days, so 30d is the full history and has no previous period to compare against. Deltas compare against the previous window of equal length. A question counts as answered when the best knowledge-base match scores at least 0.62; chats before 24 Oct used a looser cut-off, so their answer rate is overstated. Topics come from keyword rules in <code>src/worker.js</code>. Page-visit tracking began ' + (m.trackingSince ? ist(m.trackingSince) + ' IST' : 'with this release') + '; earlier periods only have Ari chats. Bots and link-preview crawlers are dropped.';
 }
 
 async function load(r) {

@@ -45,6 +45,9 @@ function quantile(sorted, q) {
 
 const istDate = ts => new Date(ts + IST_OFFSET).toISOString().slice(0, 10);
 const istHour = ts => new Date(ts + IST_OFFSET).getUTCHours();
+// Logs from 2026-10-24 carry the retrieval score; a question counts as answered only on a strong
+// match (>= 0.62, calibrated for bge-base). Older logs used a 0.35 cut-off that passed everything.
+const answered = l => (l.topScore != null ? l.topScore >= 0.62 : l.found !== false);
 const pct = (n, d) => (d ? Math.round((n / d) * 1000) / 10 : null);
 
 // Headline numbers for one slice of logs; used for the current and the previous period.
@@ -53,13 +56,13 @@ function summarize(logs, fb) {
   logs.forEach(l => { (sessions[l.sessionId] = sessions[l.sessionId] || []).push(l); });
   const turns = Object.values(sessions).map(s => s.length);
   const lat = logs.filter(l => l.latencyMs != null).map(l => l.latencyMs).sort((a, b) => a - b);
-  const answered = logs.filter(l => l.found !== false).length;
+  const answeredCount = logs.filter(answered).length;
   const up = fb.filter(f => f.rating === 'up').length, down = fb.filter(f => f.rating === 'down').length;
   return {
     visitors: new Set(logs.map(l => l.visitorId || l.sessionId)).size,
     conversations: turns.length,
     questions: logs.length,
-    answerRate: pct(answered, logs.length),
+    answerRate: pct(answeredCount, logs.length),
     medianLatencyMs: quantile(lat, 0.5),
     p90LatencyMs: quantile(lat, 0.9),
     avgTurns: turns.length ? Math.round((logs.length / turns.length) * 10) / 10 : null,
@@ -204,7 +207,7 @@ export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Se
     const k = classifyTopic(l.message);
     const a = (topicAgg[k] = topicAgg[k] || { questions: 0, answered: 0, openers: 0 });
     a.questions++;
-    if (l.found !== false) a.answered++;
+    if (answered(l)) a.answered++;
     if (!sessionsFirst[l.sessionId]) { sessionsFirst[l.sessionId] = true; a.openers++; }
   });
   const topics = Object.entries(topicAgg).sort((a, b) => b[1].questions - a[1].questions).map(([k, a]) => ({
@@ -218,7 +221,7 @@ export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Se
     const n = normalizeQuestion(l.message);
     if (!n) return;
     const q = (qAgg[n] = qAgg[n] || { text: l.message.trim(), count: 0, answered: 0, lastTs: 0, sessions: new Set() });
-    q.count++; if (l.found !== false) q.answered++;
+    q.count++; if (answered(l)) q.answered++;
     q.sessions.add(l.sessionId);
     if (l.ts > q.lastTs) { q.lastTs = l.ts; q.text = l.message.trim(); }
   });
@@ -254,7 +257,7 @@ export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Se
   cur.forEach(l => {
     const k = l.model || 'untagged';
     const m = (mAgg[k] = mAgg[k] || { count: 0, answered: 0, lat: [] });
-    m.count++; if (l.found !== false) m.answered++;
+    m.count++; if (answered(l)) m.answered++;
     if (l.latencyMs != null) m.lat.push(l.latencyMs);
   });
   const models = Object.entries(mAgg).sort((a, b) => b[1].count - a[1].count).map(([k, m]) => {
@@ -264,7 +267,7 @@ export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Se
 
   const recent = cur.slice(-30).reverse().map(l => ({
     ts: l.ts, session: String(l.sessionId).slice(0, 6), visitor: String(l.visitorId || '').slice(0, 6),
-    message: l.message, reply: (l.reply || '').slice(0, 4000), found: l.found !== false,
+    message: l.message, reply: (l.reply || '').slice(0, 4000), found: answered(l), match: l.match || null, topScore: l.topScore ?? null, sources: (l.sources || []).slice(0, 3),
     model: modelLabels[l.model] || l.model || '—', latencyMs: l.latencyMs,
   }));
 
