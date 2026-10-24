@@ -1,84 +1,248 @@
+// Ari analytics API. Runs as the Cloudflare Pages _worker.js (dashboard + API on one
+// pages.dev origin) and, for backward compatibility, as the standalone workers.dev worker.
+//
+// KV records written by the ari-chatbot worker (shared SESSIONS namespace):
+//   log:<ts>:<sessionId>  {ts, sessionId, visitorId, message, reply, latencyMs, found, model}  TTL 30d
+//   fb:<postId>           {ts, sessionId, visitorId, postId, message, rating, review}          TTL 30d
+//   vid:<visitorId>       '1', re-put on every widget open with TTL 90d (expiration - 90d = last open)
+// Written by this worker (/api/track, beacons from the portfolio page):
+//   ev:<ts>:<visitorId>:<rand>  '' with the event in key metadata (so list() returns it, no gets)  TTL 90d
+//   owner:<visitorId>           browsers marked as the site owner via ?me=1; excluded from analytics
+
+const DAY = 86400000;
+const IST_OFFSET = 5.5 * 3600000;
+const RETENTION_DAYS = 30;
+const VID_TTL_DAYS = 90;
+const MAX_LOGS = 800; // KV ops per invocation are capped; keep the most recent logs
+
+const TOPICS = [
+  ['smalltalk', 'Greetings & small talk', /^(hi+|hey+|hello+|yo|sup|thanks?|thank you|ok(ay)?|cool|nice|bye|good (morning|evening|afternoon))\b[\s!.?]*$/i],
+  ['probing', 'Prompt probing / jailbreak attempts', /system prompt|your (instructions|prompt|rules)|ignore (all |your |previous )|pretend|jailbreak|act as|roleplay|developer mode|confirm it|reveal|\bdan\b|no rules/i],
+  ['hiring', 'Hiring, availability & contact', /hire|hiring|recruit|open to|available|availability|notice period|relocat|salary|ctc|contact|email|phone|linkedin|resume|cv\b|reach (him|out)|interview|join/i],
+  ['projects', 'Projects & case studies', /project|built|build|case study|ari\b.*(work|built|rag)|rag\b|voice agent|collectiq|earnings|copilot|servzone|featurepilot|ai os|onco|topic model|credit|default|finspark|fraud|garch|nifty|portfolio risk|quickreach|segmentation|survival|sla\b|delay risk|dashboard|pipeline|model/i],
+  ['experience', 'Work experience', /experience|intern|i3digital|arisinfra|worked|work at|company|job|role at|responsibilit/i],
+  ['skills', 'Skills & toolkit', /skill|stack|tool|tech|python|sql|excel|power ?bi|tableau|react|cloudflare|llm|machine learning|\bml\b|statistic|product management|\bpm\b/i],
+  ['background', 'Background & education', /background|physics|mba|bits|pilani|education|stud(y|ied)|college|degree|career|pivot|story|about (him|prashant)|who is|tell me about/i],
+  ['meta', 'About Ari / testing', /\bari\b|are (you|u) (a |an )?(bot|ai|human|real)|(you|u) are an? (ai|bot)|prompt|vector|embedding|knowledge base|external source|chatbot|who (are|r) (you|u)|what (are|r) (you|u)/i],
+];
+const TOPIC_LABELS = Object.fromEntries(TOPICS.map(([k, l]) => [k, l]).concat([['other', 'Other']]));
+
 function classifyTopic(text) {
-  const t = text.toLowerCase();
-  if (/oncoassist|ocie|onco-dir|onco|soma|etl|pipeline|project|build|architect|finspark|garch|ai.os/i.test(t)) return 'projects';
-  if (/background|physics|mba|career|path|story|pivot|bio|about/i.test(t)) return 'background';
-  if (/hire|recruit|open.?to|role|internship|fit|availability|pm.?role|product.?manager/i.test(t)) return 'hiring';
-  if (/skill|stack|tool|tech|react|next|python|database|sql|cloudflare/i.test(t)) return 'skills';
-  if (/crab|ari|real|chatbot|ai|bot/i.test(t)) return 'off-topic';
-  return 'background';
+  const t = (text || '').trim();
+  for (const [key, , re] of TOPICS) if (re.test(t)) return key;
+  return 'other';
 }
 
-function aggregateAnalytics(logs, rangeDays) {
-  const now = Date.now();
-  const cutoff = rangeDays ? now - rangeDays * 86400000 : 0;
-  const filtered = cutoff ? logs.filter(l => l.ts >= cutoff) : logs;
+function normalizeQuestion(text) {
+  return (text || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
 
-  if (!filtered.length) {
+function quantile(sorted, q) {
+  if (!sorted.length) return null;
+  const pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return Math.round(sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo));
+}
+
+const istDate = ts => new Date(ts + IST_OFFSET).toISOString().slice(0, 10);
+const istHour = ts => new Date(ts + IST_OFFSET).getUTCHours();
+const pct = (n, d) => (d ? Math.round((n / d) * 1000) / 10 : null);
+
+// Headline numbers for one slice of logs; used for the current and the previous period.
+function summarize(logs, fb) {
+  const sessions = {};
+  logs.forEach(l => { (sessions[l.sessionId] = sessions[l.sessionId] || []).push(l); });
+  const turns = Object.values(sessions).map(s => s.length);
+  const lat = logs.filter(l => l.latencyMs != null).map(l => l.latencyMs).sort((a, b) => a - b);
+  const answered = logs.filter(l => l.found !== false).length;
+  const up = fb.filter(f => f.rating === 'up').length, down = fb.filter(f => f.rating === 'down').length;
+  return {
+    visitors: new Set(logs.map(l => l.visitorId || l.sessionId)).size,
+    conversations: turns.length,
+    questions: logs.length,
+    answerRate: pct(answered, logs.length),
+    medianLatencyMs: quantile(lat, 0.5),
+    p90LatencyMs: quantile(lat, 0.9),
+    avgTurns: turns.length ? Math.round((logs.length / turns.length) * 10) / 10 : null,
+    bounceRate: pct(turns.filter(t => t === 1).length, turns.length),
+    helpfulRate: pct(up, up + down),
+    ratings: up + down,
+  };
+}
+
+function sourceOf(ref, utm) {
+  const r = ((utm || '') + ' ' + (ref || '')).toLowerCase();
+  if (!r.trim()) return 'Direct / unknown';
+  if (/linkedin|lnkd/.test(r)) return 'LinkedIn';
+  if (/naukri|instahyre|wellfound|angel|cutshort|hirist|iimjobs|indeed|glassdoor/.test(r)) return 'Job boards';
+  if (/mail|gmail|outlook/.test(r)) return 'Email';
+  if (/google|bing|duckduckgo|yahoo|ecosia/.test(r)) return 'Search';
+  if (/github/.test(r)) return 'GitHub';
+  if (/whatsapp|wa\.me|t\.co|twitter|x\.com|instagram|facebook|telegram/.test(r)) return 'Social / messaging';
+  return 'Other: ' + r.trim().split(/[\s/]/)[0].slice(0, 40);
+}
+
+// Portfolio page analytics from beacon events, joined with Ari chat logs per visitor.
+function siteAnalytics(ev, chats) {
+  const views = ev.filter(e => e.t === 'view');
+  const people = {};
+  const person = v => (people[v] = people[v] || { id: v, visitor: String(v).slice(0, 6), firstTs: Infinity, lastTs: 0, views: 0, pages: new Set(), clicks: [], dur: {}, scroll: 0, questions: [], ariOpened: false });
+  ev.forEach(e => {
+    const p = person(e.v);
+    p.firstTs = Math.min(p.firstTs, e.ts); p.lastTs = Math.max(p.lastTs, e.ts);
+    if (e.t === 'view') {
+      p.views++; p.pages.add(e.s);
+      if (!p.loc) { p.loc = [e.ci, e.rg, e.c].filter(Boolean).join(', '); p.org = e.o; p.device = [e.dv, e.b, e.os].filter(Boolean).join(' · '); p.source = sourceOf(e.r, e.u); p.ref = e.r || ''; p.utm = e.u || ''; }
+    }
+    if (e.t === 'click' && e.l && p.clicks.length < 30) p.clicks.push(e.l);
+    if (e.t === 'leave') { p.dur[e.s] = Math.max(p.dur[e.s] || 0, e.d || 0); p.scroll = Math.max(p.scroll, e.sc || 0); }
+    if (e.t === 'ari_open') p.ariOpened = true;
+  });
+  chats.forEach(l => {
+    if (!l.visitorId) return;
+    const p = person(l.visitorId);
+    p.firstTs = Math.min(p.firstTs, l.ts); p.lastTs = Math.max(p.lastTs, l.ts);
+    p.questions.push(l.message); p.ariOpened = true;
+  });
+  const list = Object.values(people).map(p => {
+    const secs = Object.values(p.dur).reduce((a, b) => a + b, 0);
+    const uniqClicks = [...new Set(p.clicks)];
     return {
-      window: { start: '—', end: '—' },
-      kpis: { uniqueVisitors: 0, conversations: 0, avgLatencyMs: 0, avgTurnsPerConvo: 0 },
-      daily: [], topics: [], topQuestions: [], unansweredQuestions: [], latencyBuckets: [0, 0, 0, 0, 0, 0],
-      modelMix: [],
-      feedback: { thumbsUp: 0, thumbsDown: 0, total: 0, recentReviews: [] },
+      id: p.id, visitor: p.visitor, firstTs: p.firstTs, lastTs: p.lastTs, visits: p.pages.size, views: p.views,
+      location: p.loc || '—', org: p.org || '', device: p.device || '', source: p.source || (p.questions.length ? 'Unknown (chat only)' : 'Direct / unknown'),
+      ref: p.ref || '', utm: p.utm || '', timeOnSiteS: secs, maxScroll: p.scroll, clicks: uniqClicks.slice(0, 12),
+      ariOpened: p.ariOpened, questions: p.questions.length, firstQuestion: p.questions[0] || '',
+      engaged: secs >= 30 || uniqClicks.length > 0 || p.questions.length > 0,
     };
+  }).sort((a, b) => b.lastTs - a.lastTs);
+
+  const srcAgg = {}, clickAgg = {}, orgAgg = {}, locAgg = {};
+  list.forEach(p => {
+    if (p.views) srcAgg[p.source] = (srcAgg[p.source] || 0) + 1;
+    p.clicks.forEach(c => { clickAgg[c] = (clickAgg[c] || 0) + 1; });
+    if (p.org) orgAgg[p.org] = (orgAgg[p.org] || 0) + 1;
+    if (p.location !== '—') locAgg[p.location] = (locAgg[p.location] || 0) + 1;
+  });
+  const top = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n).map(([label, count]) => ({ label, count }));
+  const durs = list.filter(p => p.views && p.timeOnSiteS).map(p => p.timeOnSiteS).sort((a, b) => a - b);
+  const visitorsWithViews = list.filter(p => p.views);
+  return {
+    visitors: visitorsWithViews.length,
+    pageViews: views.length,
+    engaged: visitorsWithViews.filter(p => p.engaged).length,
+    medianTimeOnPageS: quantile(durs, 0.5),
+    people: list.slice(0, 60),
+    sources: top(srcAgg, 8), clicks: top(clickAgg, 12), orgs: top(orgAgg, 8), locations: top(locAgg, 8),
+  };
+}
+
+export { classifyTopic };
+
+export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Set(), includeMe = false, rangeDays, now = Date.now(), truncated = false }) {
+  const mine = v => !includeMe && owners.has(v);
+  const excluded = { chats: 0, events: 0 };
+  logs = logs.filter(l => l && l.ts && l.sessionId).filter(l => !(mine(l.visitorId) && ++excluded.chats)).sort((a, b) => a.ts - b.ts);
+  fb = fb.filter(f => !mine(f.visitorId));
+  visitorOpens = visitorOpens.filter(o => !mine(o.id)).map(o => o.ts);
+  events = events.filter(e => !(mine(e.v) && ++excluded.events)).sort((a, b) => a.ts - b.ts);
+  const effectiveDays = rangeDays || RETENTION_DAYS;
+  const start = now - effectiveDays * DAY;
+  const prevStart = start - effectiveDays * DAY;
+  const cur = logs.filter(l => l.ts >= start);
+  const curFb = fb.filter(f => f.ts >= start);
+  const kpis = summarize(cur, curFb);
+  // Logs expire after 30 days, so a previous period only exists for ranges up to 15 days.
+  const prevAvailable = rangeDays && rangeDays * 2 <= RETENTION_DAYS;
+  const prev = prevAvailable
+    ? summarize(logs.filter(l => l.ts >= prevStart && l.ts < start), fb.filter(f => f.ts >= prevStart && f.ts < start))
+    : null;
+
+  const curEv = events.filter(e => e.ts >= start);
+  const site = siteAnalytics(curEv, cur);
+  const prevEv = prevAvailable ? events.filter(e => e.ts >= prevStart && e.ts < start) : null;
+  if (prevEv) prev.siteVisitors = new Set(prevEv.filter(e => e.t === 'view').map(e => e.v)).size;
+  kpis.siteVisitors = site.visitors;
+  kpis.pageViews = site.pageViews;
+  kpis.medianTimeOnPageS = site.medianTimeOnPageS;
+  const opened = visitorOpens.filter(ts => ts >= start).length;
+  const askedVisitors = new Set(cur.map(l => l.visitorId).filter(Boolean));
+
+  // Returning = visitor whose first question was before this window started.
+  const firstSeen = {};
+  logs.forEach(l => { const v = l.visitorId || l.sessionId; if (!(v in firstSeen)) firstSeen[v] = l.ts; });
+  const curVisitors = new Set(cur.map(l => l.visitorId || l.sessionId));
+  const returning = [...curVisitors].filter(v => firstSeen[v] < start).length;
+
+  // Daily series, zero-filled so gaps read as quiet days rather than disappearing.
+  const daily = [];
+  const firstDay = rangeDays ? start : cur.length ? cur[0].ts : now;
+  for (let t = firstDay; istDate(t) <= istDate(now); t += DAY) {
+    const d = istDate(t);
+    if (!daily.length || daily[daily.length - 1].date !== d) daily.push({ date: d, views: 0, siteVisitors: 0, _sv: new Set(), questions: 0, unanswered: 0, conversations: 0, visitors: 0, _s: new Set(), _v: new Set() });
   }
-
-  const visitorSet = new Set(filtered.map(l => l.visitorId || l.sessionId));
-  const convosSet = new Set(filtered.map(l => l.sessionId));
-  const latencies = filtered.filter(l => l.latencyMs != null).map(l => l.latencyMs);
-  const avgLatencyMs = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
-
-  const turnsPerSession = {};
-  filtered.forEach(l => { turnsPerSession[l.sessionId] = (turnsPerSession[l.sessionId] || 0) + 1; });
-  const turnValues = Object.values(turnsPerSession);
-  const avgTurnsPerConvo = turnValues.length ? Math.round((turnValues.reduce((a, b) => a + b, 0) / turnValues.length) * 10) / 10 : 0;
-
-  const dayMap = {}, dayVisitors = {};
-  filtered.forEach(l => {
-    const d = new Date(l.ts).toISOString().slice(5, 10);
-    if (!dayMap[d]) { dayMap[d] = new Set(); dayVisitors[d] = new Set(); }
-    dayMap[d].add(l.sessionId);
-    dayVisitors[d].add(l.visitorId || l.sessionId);
+  const dayIdx = Object.fromEntries(daily.map((d, i) => [d.date, i]));
+  cur.forEach(l => {
+    const d = daily[dayIdx[istDate(l.ts)]];
+    if (!d) return;
+    d.questions++;
+    if (l.found === false) d.unanswered++;
+    d._s.add(l.sessionId); d._v.add(l.visitorId || l.sessionId);
   });
-  const daily = Object.keys(dayMap).sort().map(d => ({
-    date: d, visitors: dayVisitors[d].size, conversations: dayMap[d].size,
+  curEv.filter(e => e.t === 'view').forEach(e => {
+    const d = daily[dayIdx[istDate(e.ts)]];
+    if (d) { d.views++; d._sv.add(e.v); }
+  });
+  daily.forEach(d => { d.siteVisitors = d._sv.size; delete d._sv; });
+  daily.forEach(d => { d.conversations = d._s.size; d.visitors = d._v.size; delete d._s; delete d._v; });
+
+  const hourly = Array(24).fill(0);
+  cur.forEach(l => hourly[istHour(l.ts)]++);
+
+  // Topics: all questions, plus what people open a conversation with.
+  const topicAgg = {};
+  const sessionsFirst = {};
+  cur.forEach(l => {
+    const k = classifyTopic(l.message);
+    const a = (topicAgg[k] = topicAgg[k] || { questions: 0, answered: 0, openers: 0 });
+    a.questions++;
+    if (l.found !== false) a.answered++;
+    if (!sessionsFirst[l.sessionId]) { sessionsFirst[l.sessionId] = true; a.openers++; }
+  });
+  const topics = Object.entries(topicAgg).sort((a, b) => b[1].questions - a[1].questions).map(([k, a]) => ({
+    key: k, name: TOPIC_LABELS[k], questions: a.questions, pct: pct(a.questions, cur.length),
+    openers: a.openers, answerRate: pct(a.answered, a.questions),
   }));
 
-  const topicCounts = {};
-  filtered.forEach(l => {
-    const topic = l.topic || classifyTopic(l.message);
-    topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+  // Question clusters on normalized text.
+  const qAgg = {};
+  cur.forEach(l => {
+    const n = normalizeQuestion(l.message);
+    if (!n) return;
+    const q = (qAgg[n] = qAgg[n] || { text: l.message.trim(), count: 0, answered: 0, lastTs: 0, sessions: new Set() });
+    q.count++; if (l.found !== false) q.answered++;
+    q.sessions.add(l.sessionId);
+    if (l.ts > q.lastTs) { q.lastTs = l.ts; q.text = l.message.trim(); }
   });
-  const totalTagged = Object.values(topicCounts).reduce((a, b) => a + b, 0);
-  const topicLabels = { projects: 'Projects & technical work', background: 'Background & career path', hiring: 'Hiring / availability fit', skills: 'Skills & toolkit', 'off-topic': 'Off-topic / testing Ari' };
-  const topics = ['projects', 'background', 'hiring', 'skills', 'off-topic'].filter(t => topicCounts[t]).map(t => ({
-    name: topicLabels[t] || t, pct: totalTagged ? Math.round((topicCounts[t] / totalTagged) * 100) : 0,
+  const qList = Object.values(qAgg).map(q => ({
+    text: q.text, topic: classifyTopic(q.text), count: q.count, sessions: q.sessions.size,
+    answerRate: pct(q.answered, q.count), lastTs: q.lastTs,
   }));
+  const topQuestions = qList.slice().sort((a, b) => b.count - a.count || b.lastTs - a.lastTs).slice(0, 10);
+  const unanswered = qList.filter(q => q.answerRate !== 100).map(q => ({ ...q, misses: Math.round(q.count * (100 - q.answerRate) / 100) }))
+    .sort((a, b) => b.misses - a.misses || b.lastTs - a.lastTs).slice(0, 10);
 
-  const qCounts = {};
-  filtered.forEach(l => { const n = l.message.trim().toLowerCase(); qCounts[n] = (qCounts[n] || 0) + 1; });
-  const topQuestions = Object.entries(qCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([text]) => {
-    const sample = filtered.find(l => l.message.toLowerCase() === text);
-    return { text, topic: sample ? sample.topic || classifyTopic(text) : classifyTopic(text), count: qCounts[text] };
-  });
+  // Conversation depth.
+  const sessTurns = {};
+  cur.forEach(l => { sessTurns[l.sessionId] = (sessTurns[l.sessionId] || 0) + 1; });
+  const depth = [['1', t => t === 1], ['2', t => t === 2], ['3–5', t => t >= 3 && t <= 5], ['6+', t => t >= 6]]
+    .map(([label, f]) => ({ label, count: Object.values(sessTurns).filter(f).length }));
 
-  const unanswered = {};
-  filtered.filter(l => l.found === false).forEach(l => {
-    const n = l.message.trim().toLowerCase();
-    unanswered[n] = (unanswered[n] || 0) + 1;
-  });
-  const unansweredQuestions = Object.entries(unanswered).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([text, count]) => ({ text, count }));
-
-  const buckets = [0, 0, 0, 0, 0, 0];
-  latencies.forEach(ms => { const s = ms / 1000; if (s < 1) buckets[0]++; else if (s < 2) buckets[1]++; else if (s < 3) buckets[2]++; else if (s < 4) buckets[3]++; else if (s < 5) buckets[4]++; else buckets[5]++; });
-  const latencyMax = Math.max(...buckets, 1);
-  const latencyBuckets = buckets.map(v => Math.round((v / latencyMax) * 100));
-
-  const modelCounts = {};
-  filtered.forEach(l => {
-    if (!l.model) return;
-    modelCounts[l.model] = (modelCounts[l.model] || 0) + 1;
-  });
+  // Latency (end-to-end reply time) and model mix.
+  const lat = cur.filter(l => l.latencyMs != null).map(l => l.latencyMs).sort((a, b) => a - b);
+  const edges = [1, 2, 3, 5, 8, 12];
+  const latencyBuckets = edges.concat([Infinity]).map((e, i) => ({
+    label: i === 0 ? '<1s' : e === Infinity ? '>' + edges[edges.length - 1] + 's' : edges[i - 1] + '–' + e + 's',
+    count: lat.filter(ms => ms / 1000 < e && (i === 0 || ms / 1000 >= edges[i - 1])).length,
+  }));
   const modelLabels = {
     'gpt-oss-120b': 'Cloudflare gpt-oss-120b',
     'glm-4.7-flash': 'Cloudflare GLM-4.7-Flash',
@@ -86,72 +250,148 @@ function aggregateAnalytics(logs, rangeDays) {
     'nemotron-ultra': 'OpenRouter Nemotron Ultra',
     'gemma-4-26b': 'OpenRouter Gemma 4 26B',
   };
-  const totalTaggedModel = Object.values(modelCounts).reduce((a, b) => a + b, 0);
-  const modelMix = Object.entries(modelCounts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([model, count]) => ({
-      model: modelLabels[model] || model,
-      count,
-      pct: totalTaggedModel ? Math.round((count / totalTaggedModel) * 100) : 0,
-    }));
+  const mAgg = {};
+  cur.forEach(l => {
+    const k = l.model || 'untagged';
+    const m = (mAgg[k] = mAgg[k] || { count: 0, answered: 0, lat: [] });
+    m.count++; if (l.found !== false) m.answered++;
+    if (l.latencyMs != null) m.lat.push(l.latencyMs);
+  });
+  const models = Object.entries(mAgg).sort((a, b) => b[1].count - a[1].count).map(([k, m]) => {
+    const s = m.lat.sort((a, b) => a - b);
+    return { model: modelLabels[k] || k, count: m.count, pct: pct(m.count, cur.length), medianLatencyMs: quantile(s, 0.5), p90LatencyMs: quantile(s, 0.9), answerRate: pct(m.answered, m.count) };
+  });
 
-  const ts = filtered.map(l => l.ts).sort((a, b) => a - b);
+  const recent = cur.slice(-30).reverse().map(l => ({
+    ts: l.ts, session: String(l.sessionId).slice(0, 6), visitor: String(l.visitorId || '').slice(0, 6),
+    message: l.message, reply: (l.reply || '').slice(0, 280), found: l.found !== false,
+    model: modelLabels[l.model] || l.model || '—', latencyMs: l.latencyMs,
+  }));
+
+  const reviews = curFb.slice().sort((a, b) => b.ts - a.ts).filter(f => f.review || f.rating === 'down').slice(0, 8)
+    .map(f => ({ ts: f.ts, rating: f.rating, review: f.review || '', question: f.message || '' }));
+
   return {
-    window: { start: ts.length ? new Date(ts[0]).toISOString().slice(0, 10) : '—', end: ts.length ? new Date(ts[ts.length - 1]).toISOString().slice(0, 10) : '—' },
-    kpis: { uniqueVisitors: visitorSet.size, conversations: convosSet.size, avgLatencyMs, avgTurnsPerConvo },
-    daily, topics, topQuestions, unansweredQuestions, latencyBuckets, modelMix,
-    _visitorIds: visitorSet,
+    meta: {
+      generatedAt: now, rangeDays: rangeDays || null, retentionDays: RETENTION_DAYS,
+      windowStart: istDate(start), windowEnd: istDate(now),
+      lastEventTs: logs.length ? logs[logs.length - 1].ts : null,
+      storedLogs: logs.length, truncated, prevAvailable: !!prevAvailable,
+      lastVisitTs: events.length ? events[events.length - 1].ts : null,
+      trackingSince: events.length ? events[0].ts : null,
+      owners: owners.size, includeMe, excluded,
+    },
+    site,
+    kpis, prev,
+    funnel: { siteVisitors: site.visitors, opened, asked: askedVisitors.size, returning, newVisitors: curVisitors.size - returning },
+    daily, hourly, topics, topQuestions, unanswered, depth,
+    latency: { buckets: latencyBuckets, p50: quantile(lat, 0.5), p90: quantile(lat, 0.9), p95: quantile(lat, 0.95), max: lat.length ? lat[lat.length - 1] : null },
+    models, recent,
+    feedback: { up: curFb.filter(f => f.rating === 'up').length, down: curFb.filter(f => f.rating === 'down').length, reviews },
   };
 }
 
-function aggregateFeedback(fbList, rangeDays) {
-  const now = Date.now();
-  const cutoff = rangeDays ? now - rangeDays * 86400000 : 0;
-  const filtered = cutoff ? fbList.filter(f => f.ts >= cutoff) : fbList;
-  let up = 0, down = 0;
-  const reviews = [];
-  filtered.forEach(f => {
-    if (f.rating === 'up') up++;
-    else if (f.rating === 'down') down++;
-    if (f.review) reviews.push({ text: f.review, ts: f.ts });
-  });
-  reviews.sort((a, b) => b.ts - a.ts);
-  return { thumbsUp: up, thumbsDown: down, total: up + down, recentReviews: reviews.slice(0, 5).map(r => r.text) };
+async function listAll(kv, prefix) {
+  const keys = [];
+  let cursor;
+  do {
+    const page = await kv.list({ prefix, cursor });
+    keys.push(...page.keys);
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  return keys;
+}
+
+async function getJson(kv, keys) {
+  const out = [];
+  for (let i = 0; i < keys.length; i += 50) {
+    const vals = await Promise.all(keys.slice(i, i + 50).map(k => kv.get(k.name)));
+    vals.forEach(v => { if (v) try { out.push(JSON.parse(v)); } catch {} });
+  }
+  return out;
+}
+
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+const json = (body, status = 200) => new Response(JSON.stringify(body), {
+  status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS },
+});
+
+function device(ua) {
+  const dv = /ipad|tablet/i.test(ua) ? 'tablet' : /mobi|android|iphone/i.test(ua) ? 'mobile' : 'desktop';
+  const b = /edg\//i.test(ua) ? 'Edge' : /opr\/|opera/i.test(ua) ? 'Opera' : /chrome|crios/i.test(ua) ? 'Chrome' : /firefox|fxios/i.test(ua) ? 'Firefox' : /safari/i.test(ua) ? 'Safari' : '';
+  const os = /windows/i.test(ua) ? 'Windows' : /iphone|ipad|ios/i.test(ua) ? 'iOS' : /mac os/i.test(ua) ? 'macOS' : /android/i.test(ua) ? 'Android' : /linux/i.test(ua) ? 'Linux' : '';
+  return { dv, b, os };
+}
+const BOT_UA = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|embedly|curl|wget|python|httpclient|monitor|pingdom/i;
+const clip = (v, n) => (v == null ? '' : String(v)).slice(0, n);
+
+async function track(request, env) {
+  const ua = request.headers.get('User-Agent') || '';
+  if (BOT_UA.test(ua)) return new Response(null, { status: 204, headers: CORS });
+  let b;
+  try { b = JSON.parse(await request.text()); } catch { return new Response(null, { status: 400, headers: CORS }); }
+  const v = clip(b.v, 36);
+  if (!v || !['view', 'click', 'leave', 'ari_open'].includes(b.t)) return new Response(null, { status: 400, headers: CORS });
+  if (b.owner) await env.ANALYTICS.put('owner:' + v, String(Date.now()));
+  const cf = request.cf || {};
+  const ts = Date.now();
+  const m = { t: b.t, v, s: clip(b.s, 12), p: clip(b.p, 60) };
+  if (b.t === 'view') Object.assign(m, { r: clip(b.r, 120), u: clip(b.u, 80), c: clip(cf.country, 2), ci: clip(cf.city, 40), rg: clip(cf.region, 40), o: clip(cf.asOrganization, 60) }, device(ua));
+  if (b.t === 'click') Object.assign(m, { l: clip(b.l, 80), h: clip(b.h, 150) });
+  if (b.t === 'leave') Object.assign(m, { d: Math.min(Math.round(+b.d || 0), 7200), sc: Math.min(Math.round(+b.sc || 0), 100) });
+  await env.ANALYTICS.put(`ev:${ts}:${v}:${Math.random().toString(36).slice(2, 6)}`, '', { metadata: m, expirationTtl: 86400 * 90 });
+  return new Response(null, { status: 204, headers: CORS });
+}
+
+async function analytics(url, env) {
+  const r = url.searchParams.get('range') || '14d';
+  const rangeDays = r === 'all' ? null : ({ '1d': 1, '7d': 7, '14d': 14, '30d': 30 })[r] || 14;
+  const [logKeys, fbKeys, vidKeys, evKeys, ownerKeys] = await Promise.all([
+    listAll(env.ANALYTICS, 'log:'), listAll(env.ANALYTICS, 'fb:'), listAll(env.ANALYTICS, 'vid:'),
+    listAll(env.ANALYTICS, 'ev:'), listAll(env.ANALYTICS, 'owner:'),
+  ]);
+  // Keys are log:<ts>:<session>, so lexical order is chronological for 13-digit timestamps.
+  logKeys.sort((a, b) => (a.name < b.name ? -1 : 1));
+  const truncated = logKeys.length > MAX_LOGS;
+  const [logs, fb] = await Promise.all([getJson(env.ANALYTICS, logKeys.slice(-MAX_LOGS)), getJson(env.ANALYTICS, fbKeys.slice(-200))]);
+  const visitorOpens = vidKeys.filter(k => k.expiration).map(k => ({ id: k.name.slice(4), ts: k.expiration * 1000 - VID_TTL_DAYS * DAY }));
+  const events = evKeys.filter(k => k.metadata).map(k => ({ ts: +k.name.split(':')[1], ...k.metadata }));
+  const owners = new Set(ownerKeys.map(k => k.name.slice(6)));
+  const includeMe = url.searchParams.get('me') === '1';
+  return json(aggregate({ logs, fb, visitorOpens, events, owners, includeMe, rangeDays, truncated }));
 }
 
 export default {
   async fetch(request, env) {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS' } });
-    }
-
+    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
 
-    if (url.pathname === '/api/analytics') {
-      const rangeParam = url.searchParams.get('range') || '14d';
-      const rangeDays = rangeParam === 'all' ? null : rangeParam === '7d' ? 7 : rangeParam === '30d' ? 30 : 14;
-      try {
-        const [logKeys, vidKeys, fbKeys] = await Promise.all([
-          env.ANALYTICS.list({ prefix: 'log:' }),
-          env.ANALYTICS.list({ prefix: 'vid:' }),
-          env.ANALYTICS.list({ prefix: 'fb:' }),
-        ]);
-        const [logValues, fbValues] = await Promise.all([
-          Promise.all(logKeys.keys.map(k => env.ANALYTICS.get(k.name))),
-          Promise.all(fbKeys.keys.map(k => env.ANALYTICS.get(k.name))),
-        ]);
-        const data = aggregateAnalytics(logValues.filter(Boolean).map(JSON.parse), rangeDays);
-        const feedback = aggregateFeedback(fbValues.filter(Boolean).map(JSON.parse), rangeDays);
-        data.feedback = feedback;
-        const allVisitors = new Set(vidKeys.keys.map(k => k.name.replace('vid:', '')));
-        Array.from(data._visitorIds || []).forEach(id => allVisitors.add(id));
-        data.kpis.uniqueVisitors = allVisitors.size;
-        return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-      }
+    if (url.pathname === '/api/track' && request.method === 'POST') {
+      try { return await track(request, env); } catch { return new Response(null, { status: 204, headers: CORS }); }
     }
 
+    // Mark / unmark a visitor as the site owner from the dashboard.
+    if (url.pathname === '/api/owner' && request.method === 'POST') {
+      if (env.DASH_KEY && url.searchParams.get('key') !== env.DASH_KEY) return json({ error: 'unauthorized' }, 401);
+      const v = clip(url.searchParams.get('v'), 36);
+      if (!v) return json({ error: 'v required' }, 400);
+      if (url.searchParams.get('remove') === '1') await env.ANALYTICS.delete('owner:' + v);
+      else await env.ANALYTICS.put('owner:' + v, String(Date.now()));
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/api/analytics') {
+      if (env.DASH_KEY && url.searchParams.get('key') !== env.DASH_KEY) return json({ error: 'unauthorized' }, 401);
+      try { return await analytics(url, env); } catch (err) { return json({ error: err.message }, 500); }
+    }
+
+    // Reverse proxy for the chatbot, so visitors whose ISP blocks *.workers.dev can still reach Ari.
+    if (url.pathname.startsWith('/ari/') && env.ARI) {
+      const target = new URL(url.pathname.slice(4) + url.search, 'https://ari-chatbot.internal');
+      return env.ARI.fetch(new Request(target, request));
+    }
+
+    if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('Not found', { status: 404 });
   },
 };

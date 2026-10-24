@@ -1,42 +1,46 @@
 # Ari Instrumentation
 
-Analytics dashboard for Ari. **GitHub Pages** serves the HTML. **Cloudflare Worker** serves the API.
+Analytics for the portfolio and its Ari chatbot. It answers two questions: **did anyone visit or chat?** and **how well is Ari doing?**
+
+Live: **https://ari-instrumentation.pages.dev** (you'll be asked for the dashboard key once per device; `?key=…` in the URL also works).
 
 ## Architecture
 
 ```
-GitHub Pages                           Cloudflare Worker
-┌─────────────────┐                    ┌──────────────────────┐
-│  index.html      │  ── fetch ──────>  │  /api/analytics      │
-│  (static)        │  <── JSON ───────  │  reads KV log:* keys │
-└─────────────────┘                    └──────────────────────┘
-                                                │
-                                       shared KV namespace
-                                        (same as portfolio)
+portfolio (GitHub Pages)                    Cloudflare Pages: ari-instrumentation.pages.dev
+┌───────────────────────┐  beacon   ┌──────────────────────────────────────────────┐
+│ visit tracker         │ ───────>  │ /api/track      → KV ev:* (metadata only)    │
+│ Ari widget            │ ───────>  │ /ari/*          → service binding → ari-chatbot
+└───────────────────────┘           │ /api/analytics  → reads log:, fb:, vid:, ev: │
+                                    │ /               → index.html (dashboard)     │
+                                    └──────────────────────────────────────────────┘
+                                                  shared KV namespace (SESSIONS)
 ```
 
-## Setup
+Everything sits on `pages.dev` because some Indian ISPs block `*.workers.dev`. Under that block the dashboard loaded empty, and chats from those networks never reached Ari.
 
-### 1. Worker: deploy the API
+## What it measures
 
-Set the KV namespace ID in `wrangler.toml` (same ID as the portfolio's `SESSIONS` binding), then:
+- **Visitors:** one row per browser, showing last seen, approximate city and network org (from Cloudflare's IP lookup; no IP is stored), device, referrer/UTM, time on site, scroll depth, links and project cards clicked, and questions asked to Ari.
+- **Funnel:** portfolio visitors → opened Ari → asked → 3+ questions deep.
+- **Ari quality:** answer rate (knowledge-base match), knowledge gaps, latency p50/p90/p95, model fallback mix, conversation depth, ratings.
+- **Topics:** keyword rules in `src/worker.js`. These include a *prompt probing / jailbreak* bucket.
+- Deltas compare against the previous window of equal length. Chat logs expire after 30 days and page events after 90 days.
+
+## Excluding your own traffic
+
+Open the portfolio once with `?me=1` on each device you use (and `?me=0` to undo). Or click **this is me** on a visitor row. Those browsers are removed from every metric, including past chats. The **include my visits** toggle brings them back.
+
+## Deploy
 
 ```bash
-wrangler deploy
+./scripts/deploy.sh   # Pages (dashboard + API + Ari proxy) and the legacy workers.dev API
 ```
 
-### 2. Dashboard: enable GitHub Pages
-
-In repo Settings → Pages → Source: **Deploy from branch**, branch: `main`, folder: `/ (root)`.
-
-Dashboard goes live at `https://prashantsingh-19.github.io/ari-instrumentation/`
-
-### 3. Confirm CORS
-
-The worker already returns `Access-Control-Allow-Origin: *` on all responses, so GitHub Pages can fetch from it freely.
+The dashboard key is the `DASH_KEY` secret: `wrangler pages secret put DASH_KEY --project-name ari-instrumentation`.
 
 ## API
 
-`GET /api/analytics?range=14d` — range: `7d`, `14d`, `30d`, `all`
-
-Returns KPIs, daily traffic, topic breakdown, top questions, latency distribution.
+- `GET /api/analytics?range=1d|7d|14d|30d&key=…[&me=1]`
+- `POST /api/track` (text/plain JSON beacon: `view` | `click` | `leave` | `ari_open`)
+- `POST /api/owner?v=<visitorId>&key=…[&remove=1]`

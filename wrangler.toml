@@ -1,8 +1,15 @@
+# Cloudflare Pages project: dashboard (index.html) + API (_worker.js) on one pages.dev origin.
+# Build with scripts/deploy.sh. The standalone workers.dev API uses wrangler.worker.toml.
 name = "ari-instrumentation"
-main = "src/worker.js"
+pages_build_output_dir = "dist"
 compatibility_date = "2025-04-01"
 
 # Shared KV namespace — must match the portfolio's SESSIONS binding ID
 [[kv_namespaces]]
 binding = "ANALYTICS"
 id = "143e974b20fa4156804ee85e0a0e5ed4"
+
+# Chatbot worker, proxied at /ari/* for visitors whose ISP blocks *.workers.dev
+[[services]]
+binding = "ARI"
+service = "ari-chatbot"

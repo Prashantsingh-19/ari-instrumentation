@@ -12,6 +12,7 @@
     --ink:#141412;--ink-mid:#4a4842;--ink-light:#8a8680;
     --stone:#C8BFA8;--stone-light:#E4DFD4;--page:#F7F6F2;
     --rust:#B85C38;--surface:#1c1c1a;--border-dark:#2a2a28;
+    --good:#8fae7e;--bad:#d9785a;
     --serif:'Cormorant Garamond',Georgia,serif;
     --sans:'DM Sans',system-ui,sans-serif;
     --mono:'JetBrains Mono',monospace;
@@ -20,182 +21,151 @@
   body{
     background:var(--ink);color:var(--page);
     font-family:var(--sans);font-weight:300;
-    padding:0;min-height:100vh;
-    -webkit-font-smoothing:antialiased;
+    min-height:100vh;-webkit-font-smoothing:antialiased;
   }
-
-  .wrap{max-width:1320px;margin:0 auto;padding:5rem 3rem 6rem}
+  .wrap{max-width:1320px;margin:0 auto;padding:4rem 3rem 6rem}
 
   /* ─── HEADER ─────────────────────────────── */
   header{
     display:flex;justify-content:space-between;align-items:flex-end;
-    padding-bottom:2rem;margin-bottom:2.5rem;
-    border-bottom:1px solid var(--border-dark);
-    flex-wrap:wrap;gap:1rem;
+    padding-bottom:1.5rem;margin-bottom:1.25rem;
+    border-bottom:1px solid var(--border-dark);flex-wrap:wrap;gap:1rem;
   }
   .work-eyebrow{
     font-family:var(--mono);font-size:10px;letter-spacing:.18em;
     text-transform:uppercase;color:var(--rust);margin-bottom:.75rem;
   }
-  h1{
-    font-family:var(--serif);font-size:clamp(1.8rem,4vw,2.8rem);
-    font-weight:300;letter-spacing:-.01em;line-height:1.1;
-    color:var(--page);
-  }
+  h1{font-family:var(--serif);font-size:clamp(1.8rem,4vw,2.8rem);font-weight:300;letter-spacing:-.01em;line-height:1.1}
   h1 em{font-style:normal;color:var(--rust)}
-
+  .controls{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
   .range-toggle{
     font-family:var(--mono);font-size:11px;color:var(--ink-light);
     display:flex;gap:2px;background:var(--surface);
     padding:3px;border-radius:3px;border:1px solid var(--border-dark);
-    height:fit-content;
   }
-  .range-toggle span{
-    padding:6px 12px;border-radius:3px;cursor:pointer;
-    transition:all .2s;
-  }
-  .range-toggle span.active{
-    color:var(--rust);border:1px solid var(--rust);
-    background:rgba(180,124,56,0.12);
-  }
-  .range-toggle span:hover:not(.active){color:var(--page)}
+  .range-toggle span,.btn{padding:6px 12px;border-radius:3px;cursor:pointer;transition:all .2s;border:1px solid transparent}
+  .range-toggle span.active{color:var(--rust);border-color:var(--rust);background:rgba(184,92,56,.12)}
+  .range-toggle span:hover:not(.active),.btn:hover{color:var(--page)}
+  .btn{font-family:var(--mono);font-size:11px;color:var(--ink-light);background:var(--surface);border-color:var(--border-dark)}
 
-  /* ─── EQUATION ───────────────────────────── */
-  .equation{
-    font-family:var(--mono);font-size:13px;color:#8a8688;
-    margin-bottom:2.5rem;letter-spacing:.01em;
+  /* ─── STATUS ─────────────────────────────── */
+  .status{font-family:var(--mono);font-size:11.5px;color:var(--ink-light);margin-bottom:1.75rem;display:flex;gap:1.25rem;flex-wrap:wrap;align-items:center}
+  .status b{color:var(--page);font-weight:500}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-mid);margin-right:6px;vertical-align:1px}
+  .dot.live{background:var(--good)} .dot.stale{background:var(--rust)} .dot.err{background:var(--bad)}
+  .banner{
+    border:1px solid var(--rust);background:rgba(184,92,56,.1);border-radius:3px;
+    padding:.9rem 1.1rem;margin-bottom:1.75rem;font-size:13px;line-height:1.6;display:none;
   }
-  .equation b{color:var(--page);font-weight:500}
+  .banner b{font-weight:500}
+
+  /* ─── INSIGHTS ───────────────────────────── */
+  .insights{margin-bottom:2rem}
+  .insights ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.6rem 1.5rem}
+  .insights li{font-size:13px;line-height:1.55;padding-left:1rem;position:relative;color:var(--stone-light)}
+  .insights li::before{content:'→';position:absolute;left:0;color:var(--rust);font-family:var(--mono);font-size:11px;top:2px}
+  .insights li b{color:var(--page);font-weight:500}
 
   /* ─── KPI ROW ────────────────────────────── */
-  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2.5rem}
-  .kpi{
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+  .kpi,.card{
     background:var(--surface);border:1px solid var(--border-dark);
-    border-radius:3px;padding:1.5rem;position:relative;
-    transition:border-color .3s;overflow:hidden;
+    border-radius:3px;padding:1.35rem 1.5rem;position:relative;
+    transition:border-color .3s;overflow:hidden;min-width:0;
   }
-  .kpi:hover{border-color:var(--rust)}
-  .kpi::before{
-    content:'';position:absolute;top:0;left:0;right:0;
-    height:2px;background:var(--rust);
-    transform:scaleX(0);transform-origin:left;
-    transition:transform .4s cubic-bezier(.16,1,.3,1);
+  .kpi:hover,.card:hover{border-color:var(--rust)}
+  .kpi::before,.card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--rust);
+    transform:scaleX(0);transform-origin:left;transition:transform .4s cubic-bezier(.16,1,.3,1);
   }
-  .kpi:hover::before{transform:scaleX(1)}
-  .kpi-label{
-    font-family:var(--mono);font-size:10px;color:var(--rust);
-    text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem;
-  }
-  .kpi-value{
-    font-family:var(--serif);font-size:2rem;font-weight:300;
-    letter-spacing:-.02em;color:var(--page);
-  }
-  .kpi-delta{
-    font-family:var(--mono);font-size:11px;color:var(--ink-light);margin-top:4px;
-  }
+  .kpi:hover::before,.card:hover::before{transform:scaleX(1)}
+  .kpi-label{font-family:var(--mono);font-size:10px;color:var(--rust);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem}
+  .kpi-value{font-family:var(--serif);font-size:2rem;font-weight:300;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .kpi-delta{font-family:var(--mono);font-size:10.5px;color:var(--ink-light);margin-top:4px;min-height:14px}
+  .up{color:var(--good)} .down{color:var(--bad)}
 
   /* ─── GRID LAYOUT ────────────────────────── */
-  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem}
-  .card{
-    background:var(--surface);border:1px solid var(--border-dark);
-    border-radius:3px;padding:1.5rem;position:relative;
-    transition:border-color .3s;overflow:hidden;
-  }
-  .card:hover{border-color:var(--rust)}
-  .card::before{
-    content:'';position:absolute;top:0;left:0;right:0;
-    height:2px;background:var(--rust);
-    transform:scaleX(0);transform-origin:left;
-    transition:transform .4s cubic-bezier(.16,1,.3,1);
-  }
-  .card:hover::before{transform:scaleX(1)}
-  .card-full{margin-bottom:2.5rem}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+  .grid-32{display:grid;grid-template-columns:2fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+  .card-full{margin-bottom:1.25rem}
+  .section-head{display:flex;align-items:baseline;gap:.75rem;margin-bottom:.4rem;flex-wrap:wrap}
+  .section-head .tag{font-family:var(--mono);font-size:10px;color:var(--rust);letter-spacing:.12em;text-transform:uppercase}
+  .section-head h2{font-family:var(--serif);font-size:1.3rem;font-weight:400;letter-spacing:-.01em;line-height:1.2}
+  .card-sub{font-size:12px;color:var(--ink-light);margin-bottom:1.1rem;line-height:1.5}
+  .empty{color:var(--ink-light);font-size:13px;padding:.5rem 0}
 
-  .section-head{display:flex;align-items:baseline;gap:.75rem;margin-bottom:1.25rem}
-  .section-head .tag{
-    font-family:var(--mono);font-size:10px;color:var(--rust);
-    letter-spacing:.12em;text-transform:uppercase;
-  }
-  .section-head h2{
-    font-family:var(--serif);font-size:1.25rem;font-weight:400;
-    color:var(--page);letter-spacing:-.01em;line-height:1.2;
-  }
-  .card-sub{
-    font-size:12px;color:#8a8080;margin-bottom:1.25rem;
-    font-family:var(--sans);font-weight:300;line-height:1.5;
-  }
+  /* ─── FUNNEL ─────────────────────────────── */
+  .funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}
+  .step-num{font-family:var(--serif);font-size:1.6rem;font-variant-numeric:tabular-nums}
+  .step-label{font-family:var(--mono);font-size:10px;color:var(--ink-light);text-transform:uppercase;letter-spacing:.08em;margin:2px 0 8px}
+  .step-bar{height:6px;background:var(--border-dark);border-radius:2px;overflow:hidden}
+  .step-bar div{height:100%;background:var(--rust)}
+  .step-conv{font-family:var(--mono);font-size:10.5px;color:var(--stone);margin-top:6px}
 
-  /* ─── CATEGORY BARS ──────────────────────── */
-  .cat-row{margin-bottom:1rem}
-  .cat-top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
-  .cat-name{color:var(--page);font-family:var(--sans);font-weight:400}
-  .cat-count{font-family:var(--mono);color:var(--ink-light);font-size:11px}
-  .cat-track{height:6px;background:var(--border-dark);border-radius:2px;overflow:hidden}
-  .cat-fill{height:100%;border-radius:2px;background:var(--rust)}
-
-  /* ─── TABLES ─────────────────────────────── */
+  /* ─── BARS / TABLES ──────────────────────── */
+  .bar{height:6px;background:var(--border-dark);border-radius:2px;overflow:hidden;min-width:60px}
+  .bar div{height:100%;background:var(--rust);border-radius:2px}
   table{width:100%;border-collapse:collapse}
   th{
-    font-family:var(--mono);font-size:10px;color:var(--page);
-    text-transform:uppercase;letter-spacing:.08em;
-    text-align:left;padding:8px 8px;
-    border-bottom:1px solid var(--border-dark);
+    font-family:var(--mono);font-size:10px;color:var(--ink-light);font-weight:400;
+    text-transform:uppercase;letter-spacing:.08em;text-align:left;padding:7px 8px;
+    border-bottom:1px solid var(--border-dark);white-space:nowrap;
   }
-  td{
-    padding:10px 8px;border-bottom:1px solid var(--border-dark);
-    font-size:12.5px;color:var(--page);font-weight:300;
-  }
+  td{padding:9px 8px;border-bottom:1px solid var(--border-dark);font-size:12.5px;vertical-align:top}
   tr:last-child td{border-bottom:none}
-  .q-count{
-    font-family:var(--mono);color:#b8b0a8;text-align:right;font-size:11px;
+  .num{font-family:var(--mono);font-size:11px;color:var(--stone-light);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  th.num{color:var(--ink-light)}
+  .chip{
+    display:inline-block;font-family:var(--mono);font-size:9px;color:var(--ink-light);
+    background:var(--border-dark);padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:.04em;white-space:nowrap;
   }
-  .q-topic{
-    display:inline-block;font-family:var(--mono);font-size:9px;
-    color:var(--ink-light);background:var(--border-dark);
-    padding:2px 6px;border-radius:3px;margin-left:6px;
-    letter-spacing:.04em;
-  }
+  .chip.warn{color:var(--bad);background:rgba(217,120,90,.12)}
+  .chip.ok{color:var(--good);background:rgba(143,174,126,.12)}
+  .scroll{overflow-x:auto}
 
-  /* ─── HISTOGRAM ──────────────────────────── */
-  .hist{display:flex;align-items:flex-end;gap:5px;height:90px;margin:8px 0 6px}
-  .hist-bar{
-    flex:1;background:rgba(180,124,56,0.2);
-    border-top:2px solid var(--rust);border-radius:2px 2px 0 0;position:relative;
-  }
-  .hist-labels{display:flex;gap:5px}
-  .hist-labels span{
-    flex:1;text-align:center;font-family:var(--mono);
-    font-size:9px;color:var(--ink-light);
-  }
+  /* ─── CHARTS ─────────────────────────────── */
+  svg text{font-family:var(--mono)}
+  .legend{display:flex;gap:1rem;font-family:var(--mono);font-size:10px;color:var(--ink-light);margin-top:.5rem;flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .pcts{display:flex;gap:1.5rem;margin-top:.9rem;font-family:var(--mono);font-size:11px;color:var(--ink-light);flex-wrap:wrap}
+  .pcts b{color:var(--page);font-weight:500}
 
-  /* ─── FOOTNOTE ───────────────────────────── */
+  /* ─── FEED ───────────────────────────────── */
+  .feed-item{border-bottom:1px solid var(--border-dark);padding:.75rem 0}
+  .feed-item:last-child{border-bottom:none}
+  .feed-meta{font-family:var(--mono);font-size:10px;color:var(--ink-light);margin-bottom:4px;display:flex;gap:.75rem;flex-wrap:wrap}
+  .feed-q{font-size:13.5px;font-weight:400;color:var(--page)}
+  .feed-a{font-size:12px;color:var(--ink-light);margin-top:4px;line-height:1.5;display:none}
+  .feed-item.open .feed-a{display:block}
+  .feed-item{cursor:pointer}
+
+  .review-item{font-size:12.5px;margin-bottom:6px;padding:8px 10px;background:var(--border-dark);border-radius:3px;line-height:1.5}
+  .review-item .q{font-family:var(--mono);font-size:10px;color:var(--ink-light);margin-top:3px}
+
+  .hero-visit{font-family:var(--serif);font-size:clamp(1.3rem,2.6vw,1.75rem);font-weight:300;line-height:1.35;margin-bottom:.9rem}
+  .hero-visit b{font-weight:500;color:var(--rust)}
+  .vrow td{font-size:12px}
+  .people-table{min-width:780px}
+  .vrow.new td:first-child{box-shadow:inset 2px 0 0 var(--rust)}
+  .vsub{font-family:var(--mono);font-size:10px;color:var(--ink-light);margin-top:3px;line-height:1.5}
+  .mini-btn{font-family:var(--mono);font-size:9.5px;color:var(--ink-light);border:1px solid var(--border-dark);border-radius:3px;padding:2px 6px;cursor:pointer;background:none;white-space:nowrap}
+  .mini-btn:hover{color:var(--page);border-color:var(--rust)}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-bottom:1.25rem}
+  .switch{font-family:var(--mono);font-size:11px;color:var(--ink-light);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .switch input{accent-color:var(--rust)}
   .footnote{
-    font-family:var(--mono);font-size:11px;color:#8a8080;
-    border-top:1px solid var(--border-dark);padding-top:1.25rem;margin-top:1rem;line-height:1.7;
+    font-family:var(--mono);font-size:11px;color:var(--ink-light);
+    border-top:1px solid var(--border-dark);padding-top:1.25rem;margin-top:1rem;line-height:1.8;
   }
   .footnote b{color:var(--page);font-weight:500}
 
-  /* ─── FEEDBACK CARD ──────────────────────── */
-  .fb-row{display:flex;gap:1.5rem;margin-bottom:1rem;font-size:13px}
-  .fb-up,.fb-down{display:flex;align-items:baseline;gap:.35rem}
-  .fb-up .fb-num{font-family:var(--serif);font-size:1.3rem;font-weight:400;color:var(--page)}
-  .fb-down .fb-num{font-family:var(--serif);font-size:1.3rem;font-weight:400;color:var(--page)}
-  .fb-label{font-size:11px;color:#8a8080;font-family:var(--sans);font-weight:300}
-  .review-sect{margin-top:.75rem}
-  .review-sect-label{
-    font-family:var(--mono);font-size:10px;color:var(--ink-light);
-    text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem;
+  @media(max-width:960px){
+    .grid-2,.grid-32,.grid-3{grid-template-columns:1fr}
   }
-  .review-item{
-    font-size:12px;color:var(--page);margin-bottom:4px;
-    padding:6px 10px;background:var(--border-dark);border-radius:3px;
-    font-family:var(--sans);font-weight:300;line-height:1.5;
-  }
-
-  @media(max-width:860px){
-    .wrap{padding:3rem 1.5rem 4rem}
-    .kpi-row{grid-template-columns:repeat(2,1fr)}
-    .grid-2{grid-template-columns:1fr}
+  @media(max-width:700px){
+    .wrap{padding:2.5rem 16px 4rem}
+    .kpi-row,.funnel{grid-template-columns:repeat(2,1fr)}
+    .kpi-value{font-size:1.6rem}
   }
 </style>
 </head>
@@ -206,167 +176,423 @@
       <div class="work-eyebrow">// analytics</div>
       <h1>How people talk to <em>Ari</em></h1>
     </div>
-    <div class="range-toggle" id="rangeToggle">
-      <span data-range="7d">7d</span><span data-range="14d" class="active">14d</span><span data-range="30d">30d</span><span data-range="all">all</span>
+    <div class="controls">
+      <div class="range-toggle" id="rangeToggle">
+        <span data-range="1d">24h</span><span data-range="7d">7d</span><span data-range="14d" class="active">14d</span><span data-range="30d">30d</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="includeMe"> include my visits</label>
+      <span class="btn" id="refresh">↻ refresh</span>
     </div>
   </header>
 
-  <div class="equation"><b>Ari</b> = f( visitors, questions, latency ) &nbsp;·&nbsp; window: <b>—</b></div>
+  <div class="status" id="status"><span><span class="dot"></span>loading…</span></div>
+  <div class="banner" id="banner"></div>
 
-  <div class="kpi-row">
-    <div class="kpi"><div class="kpi-label">unique visitors</div><div class="kpi-value">—</div></div>
-    <div class="kpi"><div class="kpi-label">conversations</div><div class="kpi-value">—</div></div>
-    <div class="kpi"><div class="kpi-label">avg latency</div><div class="kpi-value">—</div></div>
-    <div class="kpi"><div class="kpi-label">avg turns / convo</div><div class="kpi-value">—</div></div>
+  <div class="insights card-full card" id="insights-card">
+    <div class="section-head"><span class="tag">// readout</span><h2>What stands out</h2></div>
+    <div class="card-sub">generated from the numbers below for the selected window</div>
+    <ul id="insights"></ul>
   </div>
 
-  <div class="grid-2">
+  <div class="card card-full">
+    <div class="section-head"><span class="tag">// who visited</span><h2>Visitors</h2></div>
+    <div id="visit-hero" class="hero-visit"></div>
+    <div class="card-sub">one row per browser, newest first; your own browsers are excluded. A rust edge marks activity since you last opened this page. Location and network org come from Cloudflare's IP lookup, so they're approximate, and a corporate network often shows as the company's ISP.</div>
+    <div class="scroll"><table class="people-table"><thead><tr><th>Last seen</th><th>Where / network</th><th>Came from</th><th>What they did</th><th>Asked Ari</th><th></th></tr></thead><tbody id="people"></tbody></table></div>
+  </div>
+
+  <div class="kpi-row" id="kpis"></div>
+
+  <div class="grid-3">
     <div class="card">
-      <div class="section-head"><span class="tag">// ∂visitors/∂day</span><h2>Traffic over time</h2></div>
-      <div class="card-sub">unique visitors (line) vs conversations started (bars)</div>
-      <div id="traffic-chart"></div>
+      <div class="section-head"><span class="tag">// source</span><h2>Where visitors came from</h2></div>
+      <div class="card-sub">referrer or utm_source of the first page view</div>
+      <div id="sources"></div>
     </div>
     <div class="card">
-      <div class="section-head"><span class="tag">// topics</span><h2>What they ask about</h2></div>
-      <div class="card-sub">conversations tagged by primary topic</div>
-      <div id="topics-list"></div>
+      <div class="section-head"><span class="tag">// clicks</span><h2>What they clicked</h2></div>
+      <div class="card-sub">visitors who clicked each link or project card</div>
+      <div id="clicks"></div>
     </div>
+    <div class="card">
+      <div class="section-head"><span class="tag">// network</span><h2>Networks & cities</h2></div>
+      <div class="card-sub">visitors by ISP or organisation network, then by city</div>
+      <div id="orgs"></div>
+    </div>
+  </div>
+
+  <div class="card card-full">
+    <div class="section-head"><span class="tag">// funnel</span><h2>From opening Ari to a real conversation</h2></div>
+    <div class="card-sub">portfolio visitors → opened the Ari widget → asked at least one question → went 3+ questions deep. "Opened" uses each visitor's most recent open, so it's approximate.</div>
+    <div class="funnel" id="funnel"></div>
+  </div>
+
+  <div class="grid-32">
+    <div class="card">
+      <div class="section-head"><span class="tag">// activity</span><h2>Questions per day</h2></div>
+      <div class="card-sub">Ari questions (bars, rust = no knowledge-base match) and portfolio visitors (line), IST days</div>
+      <div id="daily"></div>
+      <div class="legend"><span><i style="background:var(--stone);opacity:.55"></i>answered</span><span><i style="background:var(--rust)"></i>unanswered</span><span><i style="background:var(--page);height:2px;vertical-align:3px"></i>portfolio visitors</span></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><span class="tag">// when</span><h2>Hour of day</h2></div>
+      <div class="card-sub">questions by hour, IST</div>
+      <div id="hourly"></div>
+    </div>
+  </div>
+
+  <div class="card card-full">
+    <div class="section-head"><span class="tag">// topics</span><h2>What they ask about</h2></div>
+    <div class="card-sub">every question tagged by keyword rules. "Openers" = conversations that started with this topic. Answer rate = share where the knowledge base had a match.</div>
+    <div class="scroll"><table><thead><tr><th>Topic</th><th class="num">questions</th><th style="width:30%">share</th><th class="num">openers</th><th class="num">answer rate</th></tr></thead><tbody id="topics"></tbody></table></div>
   </div>
 
   <div class="grid-2">
     <div class="card">
       <div class="section-head"><span class="tag">// top asked</span><h2>Most common questions</h2></div>
-      <div class="card-sub">clustered by intent, top 6 in window</div>
-      <table><thead><tr><th>Question cluster</th><th style="text-align:right">count</th></tr></thead><tbody id="questions-body"></tbody></table>
+      <div class="card-sub">grouped on normalized text (case and punctuation ignored)</div>
+      <div class="scroll"><table><thead><tr><th>Question</th><th class="num">asked</th><th class="num">last</th></tr></thead><tbody id="questions"></tbody></table></div>
     </div>
     <div class="card">
-      <div class="section-head"><span class="tag">// ???</span><h2>Couldn't answer</h2></div>
-      <div class="card-sub">questions Ari flagged as unfound</div>
-      <table><thead><tr><th>Question</th><th style="text-align:right">count</th></tr></thead><tbody id="unanswered-body"></tbody></table>
+      <div class="section-head"><span class="tag">// gaps</span><h2>Knowledge gaps</h2></div>
+      <div class="card-sub">questions where retrieval found nothing relevant. These are the ones to add to the knowledge base.</div>
+      <div class="scroll"><table><thead><tr><th>Question</th><th class="num">misses</th><th class="num">last</th></tr></thead><tbody id="gaps"></tbody></table></div>
     </div>
   </div>
 
   <div class="grid-2">
     <div class="card">
-      <div class="section-head"><span class="tag">// feedback</span><h2>Ratings & reviews</h2></div>
-      <div class="card-sub">thumbs and recent review notes</div>
-      <div id="feedback-content"></div>
+      <div class="section-head"><span class="tag">// depth</span><h2>Conversation length</h2></div>
+      <div class="card-sub">questions per conversation. One-question conversations are bounces.</div>
+      <div id="depth"></div>
     </div>
     <div class="card">
-      <div class="section-head"><span class="tag">// response time</span><h2>Latency distribution</h2></div>
-      <div class="card-sub">time to first token, seconds</div>
-      <div class="hist" id="latency-hist"></div>
-      <div class="hist-labels"><span>&lt;1s</span><span>1-2s</span><span>2-3s</span><span>3-4s</span><span>4-5s</span><span>&gt;5s</span></div>
+      <div class="section-head"><span class="tag">// response time</span><h2>Reply latency</h2></div>
+      <div class="card-sub">end-to-end time to the full reply, including retrieval and any model fallbacks</div>
+      <div id="latency"></div>
+      <div class="pcts" id="pcts"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-head"><span class="tag">// models</span><h2>Which LLM answered</h2></div>
+      <div class="card-sub">the fallback chain runs top to bottom. Traffic on lower tiers means the primary model failed or timed out.</div>
+      <div class="scroll"><table><thead><tr><th>Model</th><th class="num">replies</th><th class="num">share</th><th class="num">p50</th><th class="num">p90</th></tr></thead><tbody id="models"></tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="section-head"><span class="tag">// feedback</span><h2>Ratings & reviews</h2></div>
+      <div class="card-sub">thumbs on replies, with written reviews and every thumbs-down</div>
+      <div id="feedback"></div>
     </div>
   </div>
 
   <div class="card card-full">
-    <div class="section-head"><span class="tag">// models</span><h2>Which LLM answered</h2></div>
-    <div class="card-sub">share of replies served by each model tier</div>
-    <div id="modelmix-content"></div>
+    <div class="section-head"><span class="tag">// live feed</span><h2>Latest conversations</h2></div>
+    <div class="card-sub">newest first, up to 30. Click a row to see Ari's reply.</div>
+    <div id="feed"></div>
   </div>
 
-  <div class="footnote"><b>Note —</b> data fetched live from the Cloudflare Worker API. The worker reads aggregated analytics logs from KV.</div>
+  <div class="footnote" id="footnote"><b>Note —</b> data is read live from Cloudflare KV. Chat logs expire after 30 days, so 30d is the full history.</div>
 </div>
 
 <script>
-const API = 'https://ari-instrumentation.itsprashantsingh19.workers.dev/api/analytics';
+// Same origin on Cloudflare Pages; from GitHub Pages or elsewhere, call the Pages API.
+const API = /pages\.dev$|localhost|127\.0\.0\.1/.test(location.hostname)
+  ? '/api/analytics'
+  : 'https://ari-instrumentation.pages.dev/api/analytics';
 
-function renderTraffic(daily) {
-  const el = document.getElementById('traffic-chart');
-  if (!daily.length) { el.innerHTML = '<p style="color:#8a8080;font-size:13px">No data yet</p>'; return; }
-  const days = daily.map(d => d.date), visitors = daily.map(d => d.visitors), convos = daily.map(d => d.conversations);
-  const w = 520, h = 170, pad = 32, maxV = Math.max(...visitors, ...convos, 1);
-  const stepX = (w - pad * 2) / Math.max(days.length - 1, 1);
-  const scaleY = v => h - pad - (v / maxV) * (h - pad * 2);
-  const barW = Math.min(stepX * 0.5, 18);
-  let bars = ''; convos.forEach((c, i) => { const x = pad + i * stepX - barW / 2, y = scaleY(c); bars += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + (h - pad - y) + '" fill="#B47C38" opacity="0.3" rx="2"/>'; });
-  let pts = visitors.map((v, i) => pad + i * stepX + ',' + scaleY(v)).join(' ');
-  let dots = visitors.map((v, i) => '<circle cx="' + (pad + i * stepX) + '" cy="' + scaleY(v) + '" r="2.5" fill="#C8BFA8"/>').join('');
-  let gl = [0,1,2,3].map(i => '<line x1="' + pad + '" y1="' + (pad + i * (h - pad * 2) / 3) + '" x2="' + (w - pad) + '" y2="' + (pad + i * (h - pad * 2) / 3) + '" stroke="#2a2a28" stroke-width="1"/>').join('');
-  let xl = ''; const ls = Math.max(1, Math.floor(days.length / 5)); days.forEach((d, i) => { if (i % ls === 0) xl += '<text x="' + (pad + i * stepX) + '" y="' + (h - 4) + '" font-size="9" fill="#8a8680" text-anchor="middle">' + d + '</text>'; });
-  el.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto">' + gl + bars + '<polyline points="' + pts + '" fill="none" stroke="#C8BFA8" stroke-width="1.5" opacity="0.8"/>' + dots + xl + '</svg>';
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let key = store.get('ari-dash-key') || '';
+// ?key=… once to save the dashboard key on this device; it is stripped from the URL.
+const urlKey = new URLSearchParams(location.search).get('key');
+if (urlKey) { key = urlKey; store.set('ari-dash-key', key); history.replaceState(null, '', location.pathname); }
+const lastSeenAt = +(store.get('ari-dash-seen') || 0);
+let range = (() => { try { return localStorage.getItem('ari-range') || '14d'; } catch { return '14d'; } })();
+let timer;
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const $ = id => document.getElementById(id);
+const fmtMs = ms => ms == null ? '—' : (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + 's';
+const fmtPct = p => p == null ? '—' : (Math.round(p) === p ? p : p.toFixed(1)) + '%';
+function ago(ts) {
+  if (!ts) return '—';
+  const s = (Date.now() - ts) / 1000;
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  return Math.round(s / 86400) + 'd ago';
+}
+const ist = ts => new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+const empty = msg => '<div class="empty">' + msg + '</div>';
+const emptyRow = (msg, cols) => '<tr><td colspan="' + cols + '" class="empty">' + msg + '</td></tr>';
+
+// higherIsBetter: true / false / null (neutral)
+function delta(cur, prev, higherIsBetter, unit) {
+  if (prev == null || cur == null) return '';
+  const d = cur - prev;
+  if (Math.abs(d) < 1e-9) return 'no change vs prev';
+  const good = higherIsBetter == null ? null : (d > 0) === higherIsBetter;
+  const cls = good == null ? '' : good ? 'up' : 'down';
+  let txt;
+  if (unit === 'pp') txt = (d > 0 ? '+' : '') + d.toFixed(1) + ' pts';
+  else if (unit === 'ms') txt = (d > 0 ? '+' : '') + (d / 1000).toFixed(1) + 's';
+  else if (prev === 0) txt = '+' + (Math.round(d * 10) / 10) + ' (from 0)';
+  else txt = (d > 0 ? '+' : '') + Math.round((d / prev) * 100) + '%';
+  return '<span class="' + cls + '">' + (d > 0 ? '▲ ' : '▼ ') + txt + '</span> vs prev';
+}
+
+function renderKpis(d) {
+  const k = d.kpis, p = d.prev || {};
+  const tiles = [
+    ['portfolio visitors', d.meta.trackingSince ? k.siteVisitors : '—', d.meta.trackingSince ? delta(k.siteVisitors, p.siteVisitors, true) || (k.pageViews + ' page views') : 'tracking starts now'],
+    ['chatted with Ari', k.visitors, delta(k.visitors, p.visitors, true) || k.conversations + ' conversations'],
+    ['questions', k.questions, delta(k.questions, p.questions, true)],
+    ['answer rate', fmtPct(k.answerRate), delta(k.answerRate, p.answerRate, true, 'pp')],
+    ['median reply', fmtMs(k.medianLatencyMs), k.p90LatencyMs != null ? 'p90 ' + fmtMs(k.p90LatencyMs) + (p.medianLatencyMs != null ? ' · ' + delta(k.medianLatencyMs, p.medianLatencyMs, false, 'ms') : '') : ''],
+    ['questions / convo', k.avgTurns == null ? '—' : k.avgTurns.toFixed(1), delta(k.avgTurns, p.avgTurns, true)],
+    ['median time on site', k.medianTimeOnPageS == null ? '—' : fmtDur(k.medianTimeOnPageS), 'per visitor, all visits'],
+    ['helpful rate', fmtPct(k.helpfulRate), k.ratings ? k.ratings + ' rating' + (k.ratings > 1 ? 's' : '') : 'no ratings yet'],
+  ];
+  if (!d.meta.prevAvailable) tiles.forEach(t => { if (t[2] && t[2].includes('vs prev')) t[2] = ''; });
+  $('kpis').innerHTML = tiles.map(t => '<div class="kpi"><div class="kpi-label">' + t[0] + '</div><div class="kpi-value">' + esc(t[1]) + '</div><div class="kpi-delta">' + t[2] + '</div></div>').join('');
+}
+
+function renderFunnel(d) {
+  const f = d.funnel, deep = d.depth.filter(x => x.label === '3–5' || x.label === '6+').reduce((a, x) => a + x.count, 0);
+  const steps = [
+    ['visited portfolio', d.meta.trackingSince ? f.siteVisitors : 0, null],
+    ['opened Ari', f.opened, d.meta.trackingSince ? f.siteVisitors : null],
+    ['asked ≥1 question', f.asked, f.opened],
+    ['conversations 3+ deep', deep, d.kpis.conversations],
+  ];
+  const max = Math.max(...steps.map(s => s[1]), 1);
+  $('funnel').innerHTML = steps.map(s => '<div><div class="step-num">' + s[1] + '</div><div class="step-label">' + s[0] + '</div><div class="step-bar"><div style="width:' + (s[1] / max * 100) + '%"></div></div><div class="step-conv">' +
+    (s[2] ? fmtPct(Math.round(s[1] / s[2] * 1000) / 10) + (s[0].startsWith('conv') ? ' of conversations' : s[0].startsWith('opened') ? ' of visitors' : ' of openers') : '&nbsp;') + '</div></div>').join('');
+}
+
+function renderDaily(daily) {
+  if (!daily.length || !daily.some(x => x.questions || x.siteVisitors)) { $('daily').innerHTML = empty('No questions in this window'); return; }
+  const w = 640, h = 190, pl = 28, pr = 10, pt = 12, pb = 24;
+  const maxQ = Math.max(...daily.map(x => x.questions), 1), maxV = Math.max(...daily.map(x => x.siteVisitors), 1);
+  const top = Math.max(maxQ, maxV);
+  const step = (w - pl - pr) / daily.length, bw = Math.max(2, Math.min(step * 0.62, 26));
+  const y = v => pt + (h - pt - pb) * (1 - v / top);
+  let svg = '';
+  [0, 0.5, 1].forEach(f => { const v = Math.round(top * f), yy = y(v); svg += '<line x1="' + pl + '" x2="' + (w - pr) + '" y1="' + yy + '" y2="' + yy + '" stroke="#2a2a28"/><text x="' + (pl - 6) + '" y="' + (yy + 3) + '" font-size="9" fill="#8a8680" text-anchor="end">' + v + '</text>'; });
+  daily.forEach((x, i) => {
+    const cx = pl + step * i + step / 2, ans = x.questions - x.unanswered;
+    svg += '<g><title>' + x.date + ': ' + x.questions + ' questions, ' + x.unanswered + ' unanswered, ' + x.siteVisitors + ' portfolio visitors</title>';
+    svg += '<rect x="' + (cx - bw / 2) + '" y="' + y(ans) + '" width="' + bw + '" height="' + (y(0) - y(ans)) + '" fill="#C8BFA8" opacity=".55" rx="1"/>';
+    if (x.unanswered) svg += '<rect x="' + (cx - bw / 2) + '" y="' + y(x.questions) + '" width="' + bw + '" height="' + (y(ans) - y(x.questions)) + '" fill="#B85C38" rx="1"/>';
+    svg += '<rect x="' + (cx - step / 2) + '" y="' + pt + '" width="' + step + '" height="' + (h - pt - pb) + '" fill="transparent"/></g>';
+  });
+  const pts = daily.map((x, i) => (pl + step * i + step / 2) + ',' + y(x.siteVisitors)).join(' ');
+  svg += '<polyline points="' + pts + '" fill="none" stroke="#F7F6F2" stroke-width="1.5" opacity=".85"/>';
+  daily.forEach((x, i) => { if (x.siteVisitors) svg += '<circle cx="' + (pl + step * i + step / 2) + '" cy="' + y(x.siteVisitors) + '" r="2.5" fill="#F7F6F2"/>'; });
+  const every = Math.max(1, Math.ceil(daily.length / 7));
+  daily.forEach((x, i) => { if (i % every === 0 || i === daily.length - 1) svg += '<text x="' + (pl + step * i + step / 2) + '" y="' + (h - 6) + '" font-size="9" fill="#8a8680" text-anchor="middle">' + x.date.slice(5) + '</text>'; });
+  $('daily').innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto">' + svg + '</svg>';
+}
+
+function renderHourly(hourly) {
+  if (!hourly.some(Boolean)) { $('hourly').innerHTML = empty('No questions in this window'); return; }
+  const w = 300, h = 190, pl = 6, pr = 6, pt = 14, pb = 24, max = Math.max(...hourly, 1);
+  const step = (w - pl - pr) / 24, bw = step * 0.7;
+  let svg = '';
+  hourly.forEach((v, i) => {
+    const bh = (h - pt - pb) * v / max, x = pl + step * i + (step - bw) / 2;
+    svg += '<rect x="' + x + '" y="' + (h - pb - bh) + '" width="' + bw + '" height="' + Math.max(bh, v ? 1 : 0) + '" fill="' + (v === max ? '#B85C38' : '#C8BFA8') + '" opacity="' + (v === max ? 1 : .55) + '" rx="1"><title>' + String(i).padStart(2, '0') + ':00 IST: ' + v + '</title></rect>';
+    if (v === max) svg += '<text x="' + (x + bw / 2) + '" y="' + (h - pb - bh - 4) + '" font-size="9" fill="#F7F6F2" text-anchor="middle">' + v + '</text>';
+  });
+  [0, 6, 12, 18, 23].forEach(i => { svg += '<text x="' + (pl + step * i + step / 2) + '" y="' + (h - 6) + '" font-size="9" fill="#8a8680" text-anchor="middle">' + String(i).padStart(2, '0') + '</text>'; });
+  $('hourly').innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto">' + svg + '</svg>';
+}
+
+function rateChip(r) {
+  if (r == null) return '—';
+  return '<span class="chip ' + (r < 80 ? 'warn' : 'ok') + '" style="margin:0">' + fmtPct(r) + '</span>';
 }
 
 function renderTopics(topics) {
-  const el = document.getElementById('topics-list');
-  if (!topics.length) { el.innerHTML = '<p style="color:#8a8080;font-size:13px">No data yet</p>'; return; }
-  const colors = ['var(--rust)','#C8BFA8','#8a8080','#4a4842','var(--ink-light)'];
-  el.innerHTML = topics.map((t, i) => '<div class="cat-row"><div class="cat-top"><span class="cat-name">' + t.name + '</span><span class="cat-count">' + t.pct + '%</span></div><div class="cat-track"><div class="cat-fill" style="width:' + t.pct + '%;background:' + (colors[i] || 'var(--rust)') + '"></div></div></div>').join('');
+  if (!topics.length) { $('topics').innerHTML = emptyRow('No questions in this window', 5); return; }
+  const max = Math.max(...topics.map(t => t.pct));
+  $('topics').innerHTML = topics.map(t => '<tr><td>' + esc(t.name) + '</td><td class="num">' + t.questions + '</td><td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><div style="width:' + (t.pct / max * 100) + '%"></div></div><span class="num" style="min-width:42px">' + fmtPct(t.pct) + '</span></div></td><td class="num">' + t.openers + '</td><td class="num">' + rateChip(t.answerRate) + '</td></tr>').join('');
 }
 
 function renderQuestions(qs) {
-  const el = document.getElementById('questions-body');
-  if (!qs.length) { el.innerHTML = '<tr><td style="color:#8a8080">No questions yet</td><td class="q-count">—</td></tr>'; return; }
-  el.innerHTML = qs.map(q => '<tr><td>' + q.text + ' <span class="q-topic">' + q.topic + '</span></td><td class="q-count">' + q.count + '</td></tr>').join('');
+  $('questions').innerHTML = qs.length ? qs.map(q => '<tr><td>' + esc(q.text) + '<span class="chip">' + esc(q.topic) + '</span>' + (q.sessions > 1 ? '<span class="chip">' + q.sessions + ' convos</span>' : '') + '</td><td class="num">' + q.count + '</td><td class="num">' + ago(q.lastTs) + '</td></tr>').join('') : emptyRow('No questions in this window', 3);
 }
 
-function renderUnanswered(qs) {
-  const el = document.getElementById('unanswered-body');
-  if (!qs || !qs.length) { el.innerHTML = '<tr><td style="color:#8a8080">No unanswered questions yet</td><td class="q-count">—</td></tr>'; return; }
-  el.innerHTML = qs.map(q => '<tr><td>' + q.text + '</td><td class="q-count">' + q.count + '</td></tr>').join('');
+function renderGaps(qs) {
+  $('gaps').innerHTML = qs.length ? qs.map(q => '<tr><td>' + esc(q.text) + '<span class="chip">' + esc(q.topic) + '</span></td><td class="num">' + q.misses + '</td><td class="num">' + ago(q.lastTs) + '</td></tr>').join('') : emptyRow('Every question in this window matched the knowledge base', 3);
+}
+
+function hbars(rows, labelW) {
+  const max = Math.max(...rows.map(r => r.count), 1);
+  return rows.map(r => '<div style="display:grid;grid-template-columns:' + labelW + 'px 1fr 36px;gap:10px;align-items:center;margin-bottom:9px"><span class="num" style="text-align:left;color:var(--ink-light);white-space:normal;overflow-wrap:anywhere">' + esc(r.label) + '</span><div class="bar" style="height:14px"><div style="width:' + (r.count / max * 100) + '%;' + (r.hl ? '' : 'opacity:.75') + '"></div></div><span class="num">' + r.count + '</span></div>').join('');
+}
+
+function renderDepth(depth) {
+  if (!depth.some(x => x.count)) { $('depth').innerHTML = empty('No conversations in this window'); return; }
+  $('depth').innerHTML = hbars(depth.map(x => ({ label: x.label + (x.label === '1' ? ' question' : ' questions'), count: x.count })), 90);
+}
+
+function renderLatency(l) {
+  if (!l.buckets.some(b => b.count)) { $('latency').innerHTML = empty('No replies in this window'); $('pcts').innerHTML = ''; return; }
+  $('latency').innerHTML = hbars(l.buckets, 56);
+  $('pcts').innerHTML = '<span>p50 <b>' + fmtMs(l.p50) + '</b></span><span>p90 <b>' + fmtMs(l.p90) + '</b></span><span>p95 <b>' + fmtMs(l.p95) + '</b></span><span>max <b>' + fmtMs(l.max) + '</b></span>';
+}
+
+function renderModels(ms) {
+  $('models').innerHTML = ms.length ? ms.map(m => '<tr><td>' + esc(m.model) + '</td><td class="num">' + m.count + '</td><td class="num">' + fmtPct(m.pct) + '</td><td class="num">' + fmtMs(m.medianLatencyMs) + '</td><td class="num">' + fmtMs(m.p90LatencyMs) + '</td></tr>').join('') : emptyRow('No replies in this window', 5);
 }
 
 function renderFeedback(fb) {
-  const el = document.getElementById('feedback-content');
-  if (!fb || !fb.total) { el.innerHTML = '<p style="color:#8a8080;font-size:13px">No feedback yet</p>'; return; }
-  let html = '<div class="fb-row">';
-  html += '<div class="fb-col"><div class="fb-num">' + fb.thumbsUp + '</div><div class="fb-label">helpful</div></div>';
-  html += '<div class="fb-col"><div class="fb-num">' + fb.thumbsDown + '</div><div class="fb-label">not helpful</div></div>';
-  html += '</div>';
-  if (fb.recentReviews && fb.recentReviews.length) {
-    html += '<div class="review-sect"><div class="review-sect-label">recent reviews</div>';
-    html += fb.recentReviews.map(r => '<div class="review-item">' + r + '</div>').join('');
-    html += '</div>';
+  const total = fb.up + fb.down;
+  if (!total && !fb.reviews.length) { $('feedback').innerHTML = empty('No feedback in this window. Ratings are optional, so expect few.'); return; }
+  let html = '<div class="pcts" style="margin:0 0 1rem"><span>helpful <b>' + fb.up + '</b></span><span>not helpful <b>' + fb.down + '</b></span>' + (total ? '<span>rate <b>' + fmtPct(Math.round(fb.up / total * 1000) / 10) + '</b></span>' : '') + '</div>';
+  html += fb.reviews.map(r => '<div class="review-item"><span class="chip ' + (r.rating === 'up' ? 'ok' : 'warn') + '" style="margin:0 6px 0 0">' + (r.rating === 'up' ? 'helpful' : 'not helpful') + '</span>' + esc(r.review || '(no comment)') + (r.question ? '<div class="q">on: ' + esc(r.question.slice(0, 140)) + ' · ' + ago(r.ts) + '</div>' : '') + '</div>').join('');
+  $('feedback').innerHTML = html;
+}
+
+function renderFeed(items) {
+  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.found ? '' : '<span class="down">no KB match</span>') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + (r.reply.length >= 280 ? '…' : '') + '</div></div>').join('') : empty('No conversations in this window');
+  document.querySelectorAll('.feed-item').forEach(el => el.addEventListener('click', () => el.classList.toggle('open')));
+}
+
+const fmtDur = s => s == null ? '—' : s < 60 ? Math.round(s) + 's' : Math.floor(s / 60) + 'm ' + String(Math.round(s % 60)).padStart(2, '0') + 's';
+
+function renderVisitHero(d) {
+  const ppl = d.site.people, real = ppl.filter(p => p.views || p.questions);
+  const since = d.meta.trackingSince;
+  let html;
+  if (!real.length) {
+    html = since ? 'No one else has visited in this window.' : 'No one else has chatted with Ari in this window. Page-visit tracking has just been switched on, so visits will show up from now.';
+  } else {
+    const last = real[0], fresh = real.filter(p => p.lastTs > lastSeenAt && lastSeenAt).length;
+    html = '<b>' + real.length + '</b> ' + (real.length === 1 ? 'person' : 'people') + ' in this window' + (d.site.engaged ? ', <b>' + d.site.engaged + '</b> engaged (30s+, a click, or a question)' : '') + '. ' +
+      'Latest: ' + ago(last.lastTs) + (last.location !== '—' ? ' from ' + esc(last.location) : '') + (last.org ? ' on ' + esc(last.org) : '') + '.' +
+      (fresh ? ' <b>' + fresh + ' new</b> since you last checked.' : '');
   }
-  el.innerHTML = html;
+  $('visit-hero').innerHTML = html;
 }
 
-function renderModelMix(mix) {
-  const el = document.getElementById('modelmix-content');
-  if (!mix || !mix.length) { el.innerHTML = '<p style="color:#8a8080;font-size:13px">No model data yet</p>'; return; }
-  const colors = ['var(--rust)','#C8BFA8','#8a8080','#4a4842','var(--ink-light)'];
-  el.innerHTML = mix.map((m, i) => '<div class="cat-row"><div class="cat-top"><span class="cat-name">' + m.model + '</span><span class="cat-count">' + m.count + ' · ' + m.pct + '%</span></div><div class="cat-track"><div class="cat-fill" style="width:' + m.pct + '%;background:' + (colors[i] || 'var(--rust)') + '"></div></div></div>').join('');
+function renderPeople(d) {
+  const ppl = d.site.people;
+  if (!ppl.length) { $('people').innerHTML = emptyRow('No visitors in this window' + (d.meta.trackingSince ? '' : '. Visit tracking starts with the next portfolio visit'), 6); return; }
+  $('people').innerHTML = ppl.map(p => {
+    const did = [];
+    if (p.views) did.push(p.visits + ' visit' + (p.visits > 1 ? 's' : '') + (p.timeOnSiteS ? ' · ' + fmtDur(p.timeOnSiteS) : '') + (p.maxScroll ? ' · scrolled ' + p.maxScroll + '%' : ''));
+    if (p.clicks.length) did.push('clicked: ' + p.clicks.map(esc).join(', '));
+    if (p.ariOpened && !p.questions) did.push('opened Ari, asked nothing');
+    return '<tr class="vrow' + (lastSeenAt && p.lastTs > lastSeenAt ? ' new' : '') + '"><td class="num" style="text-align:left">' + ago(p.lastTs) + '<div class="vsub">' + ist(p.lastTs) + '</div><div class="vsub">id ' + esc(p.visitor) + '</div></td>' +
+      '<td>' + esc(p.location) + '<div class="vsub">' + esc(p.org || '') + (p.device ? '<br>' + esc(p.device) : '') + '</div></td>' +
+      '<td>' + esc(p.source) + (p.utm ? '<div class="vsub">' + esc(p.utm) + '</div>' : p.ref ? '<div class="vsub">' + esc(p.ref.replace(/^https?:\/\//, '').slice(0, 40)) + '</div>' : '') + '</td>' +
+      '<td>' + (did.length ? did.join('<div class="vsub"></div>') : '—') + '</td>' +
+      '<td>' + (p.questions ? '<b style="font-weight:500">' + p.questions + '</b> · ' + esc(p.firstQuestion.slice(0, 80)) : '—') + '</td>' +
+      '<td><button class="mini-btn" data-owner="' + esc(p.id) + '">this is me</button></td></tr>';
+  }).join('');
+  document.querySelectorAll('[data-owner]').forEach(b => b.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm('Exclude visitor ' + b.dataset.owner.slice(0, 6) + ' from analytics as your own device?')) return;
+    await fetch(API.replace('/analytics', '/owner') + '?v=' + encodeURIComponent(b.dataset.owner) + '&key=' + encodeURIComponent(key), { method: 'POST' });
+    load(range);
+  }));
 }
 
-function renderLatency(buckets) {
-  const m = Math.max(...buckets, 1);
-  document.getElementById('latency-hist').innerHTML = buckets.map(v => '<div class="hist-bar" style="height:' + ((v / m * 100).toFixed(0)) + '%"><span style="position:absolute;top:-15px;left:0;right:0;text-align:center;font-family:JetBrains Mono,monospace;font-size:9px;color:#8a8680">' + v + '</span></div>').join('');
+function renderSiteBreakdowns(s) {
+  $('sources').innerHTML = s.sources.length ? hbars(s.sources, 120) : empty('No tracked visits yet');
+  $('clicks').innerHTML = s.clicks.length ? hbars(s.clicks.slice(0, 10), 120) : empty('No clicks yet');
+  $('orgs').innerHTML = (s.orgs.length ? hbars(s.orgs.slice(0, 5), 120) : '') + (s.locations.length ? '<div style="height:.5rem"></div>' + hbars(s.locations.slice(0, 5), 120) : '') || empty('No tracked visits yet');
 }
 
-function renderKPI(d) {
-  const vs = document.querySelectorAll('.kpi-value');
-  vs[0].textContent = d.kpis.uniqueVisitors;
-  vs[1].textContent = d.kpis.conversations;
-  vs[2].textContent = (d.kpis.avgLatencyMs / 1000).toFixed(2) + 's';
-  vs[3].textContent = d.kpis.avgTurnsPerConvo.toFixed(1);
+function renderInsights(d) {
+  const k = d.kpis, out = [];
+  const hoursSince = d.meta.lastEventTs ? (Date.now() - d.meta.lastEventTs) / 3600000 : null;
+  if (d.meta.trackingSince && k.siteVisitors) out.push('<b>' + k.siteVisitors + '</b> portfolio visitor' + (k.siteVisitors > 1 ? 's' : '') + ' (not you); <b>' + fmtPct(Math.round(k.visitors / k.siteVisitors * 1000) / 10) + '</b> of them chatted with Ari.' + (d.site.clicks[0] ? ' Most-clicked: <b>' + esc(d.site.clicks[0].label) + '</b>.' : ''));
+  if (d.meta.excluded && (d.meta.excluded.chats || d.meta.excluded.events)) out.push('Excluded <b>' + d.meta.excluded.chats + '</b> chat messages and <b>' + d.meta.excluded.events + '</b> page events from your own browsers.');
+  if (!d.meta.owners && !d.meta.includeMe) out.push('<span class="down">None of your browsers are marked yet</span>, so your own testing is counted. Open the portfolio once with <code>?me=1</code> on each device, or click "this is me" on a row.');
+  if (!k.questions) { out.push('No Ari questions in this window. Try a longer range.'); }
+  else {
+    const t = d.topics[0];
+    out.push('<b>' + esc(t.name) + '</b> is the biggest topic at ' + fmtPct(t.pct) + ' of questions.');
+    const probe = d.topics.find(x => x.key === 'probing');
+    if (probe) out.push('<b>' + probe.questions + '</b> question' + (probe.questions > 1 ? 's were' : ' was') + ' prompt-injection or jailbreak attempts (' + fmtPct(probe.pct) + '). Check the feed to confirm Ari held up.');
+    const hire = d.topics.find(x => x.key === 'hiring');
+    if (hire) out.push('<b>' + hire.questions + '</b> hiring/contact question' + (hire.questions > 1 ? 's' : '') + '. This is the recruiter-intent signal.');
+    if (d.unanswered.length) out.push('<b>' + d.unanswered.reduce((a, q) => a + q.misses, 0) + '</b> questions had no knowledge-base match. Top gap: "' + esc(d.unanswered[0].text.slice(0, 70)) + '".');
+    else out.push('Answer rate is <b>' + fmtPct(k.answerRate) + '</b>. Every question found KB context, but that only means retrieval matched something, not that the answer was right.');
+    if (k.p90LatencyMs > 8000) out.push('p90 reply time is <b>' + fmtMs(k.p90LatencyMs) + '</b>, so 1 in 10 visitors waits over 8s. Consider streaming or a faster primary model.');
+    const peak = d.hourly.indexOf(Math.max(...d.hourly));
+    out.push('Busiest hour is <b>' + String(peak).padStart(2, '0') + ':00 IST</b>. ' + (k.avgTurns ? 'Conversations average <b>' + k.avgTurns.toFixed(1) + '</b> questions; ' + fmtPct(k.bounceRate) + ' bounce after one.' : ''));
+    if (d.funnel.opened && d.funnel.asked) out.push('<b>' + fmtPct(Math.round(d.funnel.asked / d.funnel.opened * 1000) / 10) + '</b> of visitors who opened Ari asked something.');
+  }
+  if (hoursSince != null && hoursSince > 48) out.push('<span class="down">No chats logged for ' + Math.round(hoursSince / 24) + ' days.</span> If you\'ve been chatting, the requests aren\'t reaching the worker.');
+  $('insights').innerHTML = out.map(x => '<li>' + x + '</li>').join('');
 }
 
-function renderWindow(d) {
-  const el = document.querySelector('.equation');
-  if (el && d.window.start !== '—') el.innerHTML = '<b>Ari</b> = f( visitors, questions, latency ) &nbsp;·&nbsp; sample window: <b>' + d.window.start + ' – ' + d.window.end + '</b>';
+function renderStatus(d, err) {
+  if (err) {
+    $('status').innerHTML = '<span><span class="dot err"></span><b>API unreachable</b></span><span>' + esc(err) + '</span>';
+    $('banner').style.display = 'block';
+    $('banner').innerHTML = '<b>Couldn\'t load analytics.</b> The dashboard calls <code>' + esc(API) + '</code>. If you\'re on a network that blocks Cloudflare developer domains, try mobile data, or open <a href="https://ari-instrumentation.pages.dev" style="color:var(--rust)">ari-instrumentation.pages.dev</a>.';
+    return;
+  }
+  $('banner').style.display = 'none';
+  const m = d.meta, stale = m.lastEventTs && Date.now() - m.lastEventTs > 48 * 3600000;
+  $('status').innerHTML =
+    '<span><span class="dot ' + (stale ? 'stale' : 'live') + '"></span>last visit <b>' + (m.trackingSince ? ago(m.lastVisitTs) : 'not tracked yet') + '</b></span><span>last chat <b>' + ago(m.lastEventTs) + '</b>' + (m.lastEventTs ? ' (' + ist(m.lastEventTs) + ' IST)' : '') + '</span>' +
+    '<span>window <b>' + m.windowStart + ' → ' + m.windowEnd + '</b></span>' +
+    '<span>' + m.storedLogs + ' logs stored' + (m.truncated ? ' (showing latest 900)' : '') + '</span>' +
+    '<span>updated ' + new Date(m.generatedAt).toLocaleTimeString('en-IN', { hour12: false }) + ' · auto-refresh 60s</span>';
+  $('footnote').innerHTML = '<b>Note —</b> data is read live from Cloudflare KV (no caching). Chat logs expire after ' + m.retentionDays + ' days, so 30d is the full history and has no previous period to compare against. Deltas compare against the previous window of equal length. Topics come from keyword rules in <code>src/worker.js</code>. Page-visit tracking began ' + (m.trackingSince ? ist(m.trackingSince) + ' IST' : 'with this release') + '; earlier periods only have Ari chats. Bots and link-preview crawlers are dropped.';
 }
 
 async function load(r) {
-  document.querySelectorAll('.range-toggle span').forEach(s => s.classList.remove('active'));
-  document.querySelector('.range-toggle span[data-range="' + r + '"]')?.classList.add('active');
+  range = r;
+  try { localStorage.setItem('ari-range', r); } catch {}
+  document.querySelectorAll('.range-toggle span').forEach(s => s.classList.toggle('active', s.dataset.range === r));
   try {
-    const res = await fetch(API + '?range=' + r);
+    const q = '?range=' + r + ($('includeMe').checked ? '&me=1' : '') + '&key=' + encodeURIComponent(key) + '&t=' + Date.now();
+    const res = await fetch(API + q, { cache: 'no-store' });
+    if (res.status === 401) {
+      const k = prompt('Dashboard key');
+      if (k) { key = k.trim(); store.set('ari-dash-key', key); return load(r); }
+      throw new Error('dashboard key required');
+    }
     const d = await res.json();
-    renderKPI(d);
-    renderTraffic(d.daily);
+    if (!res.ok || d.error) throw new Error(d.error || 'HTTP ' + res.status);
+    renderStatus(d);
+    renderInsights(d);
+    renderVisitHero(d);
+    renderPeople(d);
+    renderSiteBreakdowns(d.site);
+    renderKpis(d);
+    renderFunnel(d);
+    renderDaily(d.daily);
+    renderHourly(d.hourly);
     renderTopics(d.topics);
     renderQuestions(d.topQuestions);
-    renderUnanswered(d.unansweredQuestions);
+    renderGaps(d.unanswered);
+    renderDepth(d.depth);
+    renderLatency(d.latency);
+    renderModels(d.models);
     renderFeedback(d.feedback);
-    renderModelMix(d.modelMix);
-    renderLatency(d.latencyBuckets);
-    renderWindow(d);
-  } catch {}
+    renderFeed(d.recent);
+  } catch (e) {
+    renderStatus(null, e.message || String(e));
+  }
+  clearTimeout(timer);
+  timer = setTimeout(() => load(range), 60000);
 }
 
 document.querySelectorAll('.range-toggle span').forEach(s => s.addEventListener('click', () => load(s.dataset.range)));
-load('14d');
+$('includeMe').addEventListener('change', () => load(range));
+// Remember when this page was last opened, to flag new visitors next time.
+window.addEventListener('pagehide', () => store.set('ari-dash-seen', String(Date.now())));
+$('refresh').addEventListener('click', () => load(range));
+load(range);
 </script>
 </body>
 </html>
