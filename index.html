@@ -432,7 +432,8 @@ function renderFunnel(d) {
   ];
   const max = Math.max(...steps.map(s => s[1]), 1);
   $('funnel').innerHTML = steps.map(s => '<div><div class="step-num">' + s[1] + '</div><div class="step-label">' + s[0] + '</div><div class="step-bar"><div style="width:' + (s[1] / max * 100) + '%"></div></div><div class="step-conv">' +
-    (s[2] ? fmtPct(Math.round(s[1] / s[2] * 1000) / 10) + (s[0].startsWith('conv') ? ' of conversations' : s[0].startsWith('opened') ? ' of visitors' : ' of openers') : '&nbsp;') + '</div></div>').join('');
+    // A ratio over 100% means the earlier step was tracked for less time (visits only since 24 Oct); hide it.
+    (s[2] && s[1] <= s[2] ? fmtPct(Math.round(s[1] / s[2] * 1000) / 10) + (s[0].startsWith('conv') ? ' of conversations' : s[0].startsWith('opened') ? ' of visitors' : ' of openers') : '&nbsp;') + '</div></div>').join('');
 }
 
 function renderDaily(daily) {
@@ -558,7 +559,7 @@ function applyMode() {
   $('modeChip').style.display = guest ? '' : 'none';
   $('switchMode').textContent = guest ? 'admin sign in' : 'sign out';
   document.querySelectorAll('[data-private]').forEach(card => {
-    if (!card.querySelector('.lock-note')) card.insertAdjacentHTML('beforeend', '<div class="lock-note"><span class="mode-chip" style="margin-right:8px">admin section</span>' + esc(card.dataset.private) + '</div>');
+    if (!card.querySelector('.lock-note')) card.insertAdjacentHTML('beforeend', '<div class="lock-note"><span class="mode-chip">admin section</span></div>');
     card.classList.toggle('locked', guest);
   });
 }
