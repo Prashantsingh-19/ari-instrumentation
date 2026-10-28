@@ -8,6 +8,7 @@
 // Written by this worker (/api/track, beacons from the portfolio page):
 //   ev:<ts>:<visitorId>:<rand>  '' with the event in key metadata (so list() returns it, no gets)  TTL 90d
 //   owner:<visitorId>           browsers marked as the site owner via ?me=1; excluded from analytics
+//   lead:<ts>:<visitorId>       {ts, v, sessionId, name, email, feedback, location} left in Ari's contact form  TTL 365d
 
 const DAY = 86400000;
 const IST_OFFSET = 5.5 * 3600000;
@@ -140,13 +141,14 @@ function siteAnalytics(ev, chats) {
 
 export { classifyTopic };
 
-export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Set(), includeMe = false, rangeDays, now = Date.now(), truncated = false }) {
+export function aggregate({ logs, fb, visitorOpens, events = [], leads = [], owners = new Set(), includeMe = false, rangeDays, now = Date.now(), truncated = false }) {
   const mine = v => !includeMe && owners.has(v);
   const excluded = { chats: 0, events: 0 };
   logs = logs.filter(l => l && l.ts && l.sessionId).filter(l => !(mine(l.visitorId) && ++excluded.chats)).sort((a, b) => a.ts - b.ts);
   fb = fb.filter(f => !mine(f.visitorId));
   visitorOpens = visitorOpens.filter(o => !mine(o.id)).map(o => o.ts);
   events = events.filter(e => !(mine(e.v) && ++excluded.events)).sort((a, b) => a.ts - b.ts);
+  leads = leads.filter(c => c && c.ts && !mine(c.v)).sort((a, b) => b.ts - a.ts);
   const effectiveDays = rangeDays || RETENTION_DAYS;
   const start = now - effectiveDays * DAY;
   const prevStart = start - effectiveDays * DAY;
@@ -291,6 +293,12 @@ export function aggregate({ logs, fb, visitorOpens, events = [], owners = new Se
     latency: { buckets: latencyBuckets, p50: quantile(lat, 0.5), p90: quantile(lat, 0.9), p95: quantile(lat, 0.95), max: lat.length ? lat[lat.length - 1] : null },
     models, recent,
     feedback: { up: curFb.filter(f => f.rating === 'up').length, down: curFb.filter(f => f.rating === 'down').length, reviews },
+    // Contacts are kept for a year and listed in full, whatever the selected range.
+    contacts: {
+      total: leads.length, inWindow: leads.filter(c => c.ts >= start).length,
+      withEmail: leads.filter(c => c.email).length,
+      list: leads.slice(0, 50).map(c => ({ ts: c.ts, visitor: String(c.v).slice(0, 6), name: c.name || '', email: c.email || '', feedback: c.feedback || '', location: c.location || '' })),
+    },
   };
 }
 
@@ -346,22 +354,69 @@ async function track(request, env) {
   return new Response(null, { status: 204, headers: CORS });
 }
 
-async function analytics(url, env) {
-  const r = url.searchParams.get('range') || '14d';
-  const rangeDays = r === 'all' ? null : ({ '1d': 1, '7d': 7, '14d': 14, '30d': 30 })[r] || 14;
-  const [logKeys, fbKeys, vidKeys, evKeys, ownerKeys] = await Promise.all([
+const rangeOf = url => { const r = url.searchParams.get('range'); return ['1d', '7d', '14d', '30d', 'all'].includes(r) ? r : '14d'; };
+
+// Name, email and feedback a visitor chose to leave in Ari's contact form.
+async function contact(request, env) {
+  if (BOT_UA.test(request.headers.get('User-Agent') || '')) return new Response(null, { status: 204, headers: CORS });
+  let b;
+  try { b = JSON.parse(await request.text()); } catch { return json({ error: 'bad json' }, 400); }
+  const v = clip(b.v, 36), name = clip(b.name, 80).trim(), email = clip(b.email, 120).trim(), feedback = clip(b.feedback, 600).trim();
+  if (!v || !(name || email || feedback)) return json({ error: 'nothing to save' }, 400);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'invalid email' }, 400);
+  const cf = request.cf || {}, ts = Date.now();
+  const location = [cf.city, cf.region, cf.country].filter(Boolean).join(', ');
+  await env.ANALYTICS.put(`lead:${ts}:${v}`, JSON.stringify({ ts, v, sessionId: clip(b.s, 36), name, email, feedback, location }), { expirationTtl: 86400 * 365 });
+  return json({ ok: true });
+}
+
+async function analytics(url, env, includeMe = url.searchParams.get('me') === '1') {
+  const r = rangeOf(url);
+  const rangeDays = r === 'all' ? null : ({ '1d': 1, '7d': 7, '14d': 14, '30d': 30 })[r];
+  const [logKeys, fbKeys, vidKeys, evKeys, ownerKeys, leadKeys] = await Promise.all([
     listAll(env.ANALYTICS, 'log:'), listAll(env.ANALYTICS, 'fb:'), listAll(env.ANALYTICS, 'vid:'),
-    listAll(env.ANALYTICS, 'ev:'), listAll(env.ANALYTICS, 'owner:'),
+    listAll(env.ANALYTICS, 'ev:'), listAll(env.ANALYTICS, 'owner:'), listAll(env.ANALYTICS, 'lead:'),
   ]);
   // Keys are log:<ts>:<session>, so lexical order is chronological for 13-digit timestamps.
   logKeys.sort((a, b) => (a.name < b.name ? -1 : 1));
   const truncated = logKeys.length > MAX_LOGS;
-  const [logs, fb] = await Promise.all([getJson(env.ANALYTICS, logKeys.slice(-MAX_LOGS)), getJson(env.ANALYTICS, fbKeys.slice(-200))]);
+  leadKeys.sort((a, b) => (a.name < b.name ? -1 : 1));
+  const [logs, fb, leads] = await Promise.all([getJson(env.ANALYTICS, logKeys.slice(-MAX_LOGS)), getJson(env.ANALYTICS, fbKeys.slice(-200)), getJson(env.ANALYTICS, leadKeys.slice(-100))]);
   const visitorOpens = vidKeys.filter(k => k.expiration).map(k => ({ id: k.name.slice(4), ts: k.expiration * 1000 - VID_TTL_DAYS * DAY }));
   const events = evKeys.filter(k => k.metadata).map(k => ({ ts: +k.name.split(':')[1], ...k.metadata }));
   const owners = new Set(ownerKeys.map(k => k.name.slice(6)));
-  const includeMe = url.searchParams.get('me') === '1';
-  return json(aggregate({ logs, fb, visitorOpens, events, owners, includeMe, rangeDays, truncated }));
+  return aggregate({ logs, fb, visitorOpens, events, leads, owners, includeMe, rangeDays, truncated });
+}
+
+// Public guest view (no key): counts and charts, plus a glimpse of the top questions with contact
+// details masked. Visitor rows, sources, locations, networks, replies and reviews never leave the worker.
+const GUEST_QUESTIONS = 3;
+const scrub = t => t
+  .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]')
+  .replace(/https?:\/\/\S+|www\.\S+/gi, '[link]')
+  .replace(/\+?\d[\d\s-]{6,}\d/g, '[number]')
+  .slice(0, 120);
+export function guestView(d) {
+  return {
+    ...d,
+    meta: { ...d.meta, guest: true, includeMe: false, excluded: { chats: 0, events: 0 }, distinctQuestions: d.topQuestions.length },
+    site: { ...d.site, people: [], orgs: [], locations: [], sources: [] },
+    topQuestions: d.topQuestions.slice(0, GUEST_QUESTIONS).map(q => ({ text: scrub(q.text), topic: q.topic, count: q.count, sessions: q.sessions, lastTs: q.lastTs })),
+    unanswered: [], recent: [],
+    feedback: { ...d.feedback, reviews: [] },
+    contacts: { ...d.contacts, list: [] },
+  };
+}
+
+// Guests are unauthenticated, so cache per range to keep KV list operations bounded.
+const GUEST_TTL = 5 * 60000;
+const guestCache = new Map();
+async function guestAnalytics(url, env) {
+  const r = rangeOf(url), hit = guestCache.get(r);
+  if (hit && Date.now() - hit.at < GUEST_TTL) return hit.body;
+  const body = guestView(await analytics(url, env, false));
+  guestCache.set(r, { at: Date.now(), body });
+  return body;
 }
 
 export default {
@@ -371,6 +426,10 @@ export default {
 
     if (url.pathname === '/api/track' && request.method === 'POST') {
       try { return await track(request, env); } catch { return new Response(null, { status: 204, headers: CORS }); }
+    }
+
+    if (url.pathname === '/api/contact' && request.method === 'POST') {
+      try { return await contact(request, env); } catch { return json({ error: 'failed' }, 500); }
     }
 
     // Mark / unmark a visitor as the site owner from the dashboard.
@@ -384,8 +443,9 @@ export default {
     }
 
     if (url.pathname === '/api/analytics') {
-      if (env.DASH_KEY && url.searchParams.get('key') !== env.DASH_KEY) return json({ error: 'unauthorized' }, 401);
-      try { return await analytics(url, env); } catch (err) { return json({ error: err.message }, 500); }
+      const guest = url.searchParams.get('guest') === '1';
+      if (!guest && env.DASH_KEY && url.searchParams.get('key') !== env.DASH_KEY) return json({ error: 'unauthorized' }, 401);
+      try { return json(guest ? await guestAnalytics(url, env) : await analytics(url, env)); } catch (err) { return json({ error: err.message }, 500); }
     }
 
     // Reverse proxy for the chatbot, so visitors whose ISP blocks *.workers.dev can still reach Ari.

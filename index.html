@@ -159,17 +159,68 @@
   }
   .footnote b{color:var(--page);font-weight:500}
 
+  /* ─── ACCESS GATE + GUEST VIEW ───────────── */
+  .gate{position:fixed;inset:0;z-index:50;background:var(--ink);display:none;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+  .gate.show{display:flex}
+  .gate-box{max-width:760px;width:100%}
+  .gate-box h1{margin-bottom:.6rem}
+  .gate-lede{font-size:14px;color:var(--ink-light);line-height:1.6;margin-bottom:2rem;max-width:56ch}
+  .gate-options{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+  .gate-opt{background:var(--surface);border:1px solid var(--border-dark);border-radius:4px;padding:1.5rem;display:flex;flex-direction:column;gap:.9rem}
+  .gate-opt p{font-size:13px;color:var(--ink-light);line-height:1.6;flex:1}
+  .gate-opt ul{font-size:12.5px;color:var(--ink-light);line-height:1.7;padding-left:1.1rem;flex:1}
+  .gate-opt input{font-family:var(--mono);font-size:12px;background:var(--ink);color:var(--page);border:1px solid var(--border-dark);border-radius:3px;padding:9px 11px;width:100%}
+  .gate-opt input:focus{outline:none;border-color:var(--rust)}
+  .gate-btn{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;padding:10px 14px;border-radius:3px;cursor:pointer;border:1px solid var(--rust);background:rgba(184,92,56,.12);color:var(--page);transition:background .2s}
+  .gate-btn:hover{background:rgba(184,92,56,.25)}
+  .gate-btn.ghost{border-color:var(--border-dark);background:none;color:var(--ink-light)}
+  .gate-btn.ghost:hover{color:var(--page);border-color:var(--stone)}
+  .gate-err{font-family:var(--mono);font-size:11px;color:var(--bad);min-height:1em}
+  .lock-note .mode-chip{display:inline-block;padding:3px 7px;font-size:9px}
+  .mode-chip{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--rust);border:1px solid var(--rust);border-radius:3px;padding:5px 9px}
+  body.guest .admin-only{display:none}
+  .card.locked > :not(.section-head):not(.lock-note):not(.guest-keep){display:none}
+  .lock-note{display:none;font-size:12.5px;color:var(--ink-light);line-height:1.6;border:1px dashed var(--border-dark);border-radius:3px;padding:1rem 1.1rem;margin-top:.6rem}
+  .card.locked .lock-note{display:block}
+  .lock-note b{color:var(--page);font-weight:500}
+
   @media(max-width:960px){
     .grid-2,.grid-32,.grid-3{grid-template-columns:1fr}
   }
   @media(max-width:700px){
     .wrap{padding:2.5rem 16px 4rem}
+    .gate-options{grid-template-columns:1fr}
     .kpi-row,.funnel{grid-template-columns:repeat(2,1fr)}
     .kpi-value{font-size:1.6rem}
   }
 </style>
 </head>
 <body>
+<div class="gate" id="gate">
+  <div class="gate-box">
+    <div class="work-eyebrow">// ari analytics</div>
+    <h1>How people talk to <em>Ari</em></h1>
+    <p class="gate-lede">This dashboard tracks visits to Prashant's portfolio and conversations with Ari, the portfolio chatbot. Choose how you'd like to look around.</p>
+    <div class="gate-options">
+      <form class="gate-opt" id="adminForm">
+        <div class="section-head"><span class="tag">// admin</span><h2>Admin dashboard</h2></div>
+        <p>Every section, including visitor-level rows, locations, networks and full chat transcripts. Needs the dashboard key.</p>
+        <input id="keyInput" type="password" placeholder="dashboard key" autocomplete="current-password">
+        <div class="gate-err" id="gateErr"></div>
+        <button class="gate-btn" type="submit">Unlock →</button>
+      </form>
+      <div class="gate-opt">
+        <div class="section-head"><span class="tag">// guest</span><h2>Sample dashboard</h2></div>
+        <ul>
+          <li>Live traffic, funnel, topics, latency and model mix</li>
+          <li>Visitor details, locations and networks hidden</li>
+          <li>Questions, replies and reviews hidden</li>
+        </ul>
+        <button class="gate-btn ghost" type="button" id="guestBtn">View sample dashboard →</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="wrap">
   <header>
     <div>
@@ -180,8 +231,10 @@
       <div class="range-toggle" id="rangeToggle">
         <span data-range="1d">24h</span><span data-range="7d">7d</span><span data-range="14d" class="active">14d</span><span data-range="30d">30d</span>
       </div>
-      <label class="switch"><input type="checkbox" id="includeMe"> include my visits</label>
+      <label class="switch admin-only"><input type="checkbox" id="includeMe"> include my visits</label>
       <span class="btn" id="refresh">↻ refresh</span>
+      <span class="mode-chip" id="modeChip" style="display:none">sample dashboard</span>
+      <span class="btn" id="switchMode">admin sign in</span>
     </div>
   </header>
 
@@ -194,17 +247,24 @@
     <ul id="insights"></ul>
   </div>
 
-  <div class="card card-full">
+  <div class="card card-full" data-private="Who each visitor is: one row per visitor, with approximate location, ISP or company network, device, referrer, time on site, clicks and their first question to Ari.">
     <div class="section-head"><span class="tag">// who visited</span><h2>Visitors</h2></div>
-    <div id="visit-hero" class="hero-visit"></div>
+    <div id="visit-hero" class="hero-visit guest-keep"></div>
     <div class="card-sub">one row per browser, newest first; your own browsers are excluded. A rust edge marks activity since you last opened this page. Location and network org come from Cloudflare's IP lookup, so they're approximate, and a corporate network often shows as the company's ISP.</div>
     <div class="scroll"><table class="people-table"><thead><tr><th>Last seen</th><th>Where / network</th><th>Came from</th><th>What they did</th><th>Asked Ari</th><th></th></tr></thead><tbody id="people"></tbody></table></div>
+  </div>
+
+  <div class="card card-full" data-private="The name, email and feedback each visitor chose to leave in Ari's contact form, with when and roughly where they left it, so Prashant can follow up.">
+    <div class="section-head"><span class="tag">// contacts</span><h2>Contacts & feedback left with Ari</h2></div>
+    <div id="contacts-hero" class="hero-visit guest-keep"></div>
+    <div class="card-sub">from Ari's "before you go" form, shown after 45s without a question. Kept for a year and listed whatever the range; your own browsers are excluded.</div>
+    <div class="scroll"><table><thead><tr><th>When</th><th>Name</th><th>Email</th><th>Feedback</th><th>Where</th></tr></thead><tbody id="contacts"></tbody></table></div>
   </div>
 
   <div class="kpi-row" id="kpis"></div>
 
   <div class="grid-3">
-    <div class="card">
+    <div class="card" data-private="Where visitors came from: LinkedIn, job boards, email, search, GitHub or direct, from the referrer or utm_source of their first page view.">
       <div class="section-head"><span class="tag">// source</span><h2>Where visitors came from</h2></div>
       <div class="card-sub">referrer or utm_source of the first page view</div>
       <div id="sources"></div>
@@ -214,7 +274,7 @@
       <div class="card-sub">visitors who clicked each link or project card</div>
       <div id="clicks"></div>
     </div>
-    <div class="card">
+    <div class="card" data-private="Top ISP or organisation networks and cities, from Cloudflare's IP lookup.">
       <div class="section-head"><span class="tag">// network</span><h2>Networks & cities</h2></div>
       <div class="card-sub">visitors by ISP or organisation network, then by city</div>
       <div id="orgs"></div>
@@ -253,7 +313,7 @@
       <div class="card-sub">grouped on normalized text (case and punctuation ignored)</div>
       <div class="scroll"><table><thead><tr><th>Question</th><th class="num">asked</th><th class="num">last</th></tr></thead><tbody id="questions"></tbody></table></div>
     </div>
-    <div class="card">
+    <div class="card" data-private="Questions where retrieval found nothing relevant, ranked by misses. This is the to-do list for the knowledge base.">
       <div class="section-head"><span class="tag">// gaps</span><h2>Knowledge gaps</h2></div>
       <div class="card-sub">questions where retrieval found nothing relevant. These are the ones to add to the knowledge base.</div>
       <div class="scroll"><table><thead><tr><th>Question</th><th class="num">misses</th><th class="num">last</th></tr></thead><tbody id="gaps"></tbody></table></div>
@@ -287,7 +347,7 @@
     </div>
   </div>
 
-  <div class="card card-full">
+  <div class="card card-full" data-private="The latest 30 questions with Ari's full replies, the model that answered, latency, retrieval score and the knowledge-base sources used.">
     <div class="section-head"><span class="tag">// live feed</span><h2>Latest conversations</h2></div>
     <div class="card-sub">newest first, up to 30. Click a row to see Ari's reply.</div>
     <div id="feed"></div>
@@ -302,11 +362,15 @@ const API = /pages\.dev$|localhost|127\.0\.0\.1/.test(location.hostname)
   ? '/api/analytics'
   : 'https://ari-instrumentation.pages.dev/api/analytics';
 
-const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }, del: k => { try { localStorage.removeItem(k); } catch {} } };
 let key = store.get('ari-dash-key') || '';
-// ?key=… once to save the dashboard key on this device; it is stripped from the URL.
-const urlKey = new URLSearchParams(location.search).get('key');
-if (urlKey) { key = urlKey; store.set('ari-dash-key', key); history.replaceState(null, '', location.pathname); }
+// ?key=… once to save the dashboard key on this device; ?guest=1 opens the guest view directly.
+const params = new URLSearchParams(location.search);
+const urlKey = params.get('key');
+if (urlKey) { key = urlKey; store.set('ari-dash-key', key); }
+if (urlKey || params.has('guest')) history.replaceState(null, '', location.pathname);
+// 'admin' (key), 'guest' (aggregates only, enforced by the API) or null (show the access screen).
+let mode = key ? 'admin' : params.get('guest') === '1' ? 'guest' : null;
 const lastSeenAt = +(store.get('ari-dash-seen') || 0);
 let range = (() => { try { return localStorage.getItem('ari-range') || '14d'; } catch { return '14d'; } })();
 let timer;
@@ -420,8 +484,10 @@ function renderTopics(topics) {
   $('topics').innerHTML = topics.map(t => '<tr><td>' + esc(t.name) + '</td><td class="num">' + t.questions + '</td><td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><div style="width:' + (t.pct / max * 100) + '%"></div></div><span class="num" style="min-width:42px">' + fmtPct(t.pct) + '</span></div></td><td class="num">' + t.openers + '</td><td class="num">' + rateChip(t.answerRate) + '</td></tr>').join('');
 }
 
-function renderQuestions(qs) {
-  $('questions').innerHTML = qs.length ? qs.map(q => '<tr><td>' + esc(q.text) + '<span class="chip">' + esc(q.topic) + '</span>' + (q.sessions > 1 ? '<span class="chip">' + q.sessions + ' convos</span>' : '') + '</td><td class="num">' + q.count + '</td><td class="num">' + ago(q.lastTs) + '</td></tr>').join('') : emptyRow('No questions in this window', 3);
+function renderQuestions(qs, meta) {
+  const more = meta.guest && meta.distinctQuestions > qs.length
+    ? emptyRow('A glimpse: top ' + qs.length + ' of ' + meta.distinctQuestions + ' most-asked questions, contact details masked. The full list is in the admin section.', 3) : '';
+  $('questions').innerHTML = more + (qs.length ? qs.map(q => '<tr><td>' + esc(q.text) + '<span class="chip">' + esc(q.topic) + '</span>' + (q.sessions > 1 ? '<span class="chip">' + q.sessions + ' convos</span>' : '') + '</td><td class="num">' + q.count + '</td><td class="num">' + ago(q.lastTs) + '</td></tr>').join('') : emptyRow('No questions in this window', 3));
 }
 
 function renderGaps(qs) {
@@ -464,6 +530,13 @@ function renderFeed(items) {
 const fmtDur = s => s == null ? '—' : s < 60 ? Math.round(s) + 's' : Math.floor(s / 60) + 'm ' + String(Math.round(s % 60)).padStart(2, '0') + 's';
 
 function renderVisitHero(d) {
+  if (d.meta.guest) {
+    const n = d.kpis.siteVisitors;
+    $('visit-hero').innerHTML = d.meta.trackingSince && n
+      ? '<b>' + n + '</b> ' + (n === 1 ? 'person' : 'people') + ' visited the portfolio in this window' + (d.site.engaged ? ', <b>' + d.site.engaged + '</b> engaged (30s+, a click, or a question)' : '') + ', with <b>' + d.site.pageViews + '</b> page views.'
+      : 'No visitors in this window yet.';
+    return;
+  }
   const ppl = d.site.people, real = ppl.filter(p => p.views || p.questions);
   const since = d.meta.trackingSince;
   let html;
@@ -476,6 +549,36 @@ function renderVisitHero(d) {
       (fresh ? ' <b>' + fresh + ' new</b> since you last checked.' : '');
   }
   $('visit-hero').innerHTML = html;
+}
+
+// Guest view: admin-only cards keep their heading and show a note on what an admin sees instead.
+function applyMode() {
+  const guest = mode === 'guest';
+  document.body.classList.toggle('guest', guest);
+  $('modeChip').style.display = guest ? '' : 'none';
+  $('switchMode').textContent = guest ? 'admin sign in' : 'sign out';
+  document.querySelectorAll('[data-private]').forEach(card => {
+    if (!card.querySelector('.lock-note')) card.insertAdjacentHTML('beforeend', '<div class="lock-note"><span class="mode-chip" style="margin-right:8px">admin section</span>' + esc(card.dataset.private) + '</div>');
+    card.classList.toggle('locked', guest);
+  });
+}
+
+function showGate(err) {
+  clearTimeout(timer);
+  $('gateErr').textContent = err || '';
+  $('gate').classList.add('show');
+  setTimeout(() => $('keyInput').focus(), 0);
+}
+
+function renderContacts(c, meta) {
+  $('contacts-hero').innerHTML = c.total
+    ? '<b>' + c.total + '</b> visitor' + (c.total > 1 ? 's' : '') + ' left details with Ari' + (c.withEmail ? ', <b>' + c.withEmail + '</b> with an email' : '') + ' (' + c.inWindow + ' in this window).'
+    : 'No one has left contact details yet.';
+  if (meta.guest) return;
+  $('contacts').innerHTML = c.list.length ? c.list.map(x => '<tr><td class="num" style="text-align:left">' + ago(x.ts) + '<div class="vsub">' + ist(x.ts) + '</div><div class="vsub">id ' + esc(x.visitor) + '</div></td>' +
+    '<td>' + (esc(x.name) || '—') + '</td>' +
+    '<td>' + (x.email ? '<a href="mailto:' + esc(x.email) + '" style="color:var(--rust)">' + esc(x.email) + '</a>' : '—') + '</td>' +
+    '<td>' + (esc(x.feedback) || '—') + '</td><td>' + (esc(x.location) || '—') + '</td></tr>').join('') : emptyRow('No contacts yet', 5);
 }
 
 function renderPeople(d) {
@@ -510,9 +613,10 @@ function renderSiteBreakdowns(s) {
 function renderInsights(d) {
   const k = d.kpis, out = [];
   const hoursSince = d.meta.lastEventTs ? (Date.now() - d.meta.lastEventTs) / 3600000 : null;
-  if (d.meta.trackingSince && k.siteVisitors) out.push('<b>' + k.siteVisitors + '</b> portfolio visitor' + (k.siteVisitors > 1 ? 's' : '') + ' (not you); <b>' + fmtPct(Math.round(k.visitors / k.siteVisitors * 1000) / 10) + '</b> of them chatted with Ari.' + (d.site.clicks[0] ? ' Most-clicked: <b>' + esc(d.site.clicks[0].label) + '</b>.' : ''));
-  if (d.meta.excluded && (d.meta.excluded.chats || d.meta.excluded.events)) out.push('Excluded <b>' + d.meta.excluded.chats + '</b> chat messages and <b>' + d.meta.excluded.events + '</b> page events from your own browsers.');
-  if (!d.meta.owners && !d.meta.includeMe) out.push('<span class="down">None of your browsers are marked yet</span>, so your own testing is counted. Open the portfolio once with <code>?me=1</code> on each device, or click "this is me" on a row.');
+  if (d.meta.trackingSince && k.siteVisitors) out.push('<b>' + k.siteVisitors + '</b> portfolio visitor' + (k.siteVisitors > 1 ? 's' : '') + (d.meta.guest ? ' (owner excluded)' : ' (not you)') + '; <b>' + fmtPct(Math.round(k.visitors / k.siteVisitors * 1000) / 10) + '</b> of them chatted with Ari.' + (d.site.clicks[0] ? ' Most-clicked: <b>' + esc(d.site.clicks[0].label) + '</b>.' : ''));
+  if (!d.meta.guest && d.contacts.inWindow) out.push('<b>' + d.contacts.inWindow + '</b> visitor' + (d.contacts.inWindow > 1 ? 's' : '') + ' left contact details or feedback with Ari in this window. See the contacts card.');
+  if (!d.meta.guest && d.meta.excluded && (d.meta.excluded.chats || d.meta.excluded.events)) out.push('Excluded <b>' + d.meta.excluded.chats + '</b> chat messages and <b>' + d.meta.excluded.events + '</b> page events from your own browsers.');
+  if (!d.meta.guest && !d.meta.owners && !d.meta.includeMe) out.push('<span class="down">None of your browsers are marked yet</span>, so your own testing is counted. Open the portfolio once with <code>?me=1</code> on each device, or click "this is me" on a row.');
   if (!k.questions) { out.push('No Ari questions in this window. Try a longer range.'); }
   else {
     const t = d.topics[0];
@@ -521,14 +625,15 @@ function renderInsights(d) {
     if (probe) out.push('<b>' + probe.questions + '</b> question' + (probe.questions > 1 ? 's were' : ' was') + ' prompt-injection or jailbreak attempts (' + fmtPct(probe.pct) + '). Check the feed to confirm Ari held up.');
     const hire = d.topics.find(x => x.key === 'hiring');
     if (hire) out.push('<b>' + hire.questions + '</b> hiring/contact question' + (hire.questions > 1 ? 's' : '') + '. This is the recruiter-intent signal.');
-    if (d.unanswered.length) out.push('<b>' + d.unanswered.reduce((a, q) => a + q.misses, 0) + '</b> questions had no knowledge-base match. Top gap: "' + esc(d.unanswered[0].text.slice(0, 70)) + '".');
+    if (d.meta.guest) { if (k.answerRate != null) out.push('Answer rate is <b>' + fmtPct(k.answerRate) + '</b>, the share of questions with a strong knowledge-base match.'); }
+    else if (d.unanswered.length) out.push('<b>' + d.unanswered.reduce((a, q) => a + q.misses, 0) + '</b> questions had no knowledge-base match. Top gap: "' + esc(d.unanswered[0].text.slice(0, 70)) + '".');
     else out.push('Answer rate is <b>' + fmtPct(k.answerRate) + '</b>. Every question found KB context, but that only means retrieval matched something, not that the answer was right.');
     if (k.p90LatencyMs > 8000) out.push('p90 reply time is <b>' + fmtMs(k.p90LatencyMs) + '</b>, so 1 in 10 visitors waits over 8s. Consider streaming or a faster primary model.');
     const peak = d.hourly.indexOf(Math.max(...d.hourly));
     out.push('Busiest hour is <b>' + String(peak).padStart(2, '0') + ':00 IST</b>. ' + (k.avgTurns ? 'Conversations average <b>' + k.avgTurns.toFixed(1) + '</b> questions; ' + fmtPct(k.bounceRate) + ' bounce after one.' : ''));
     if (d.funnel.opened && d.funnel.asked) out.push('<b>' + fmtPct(Math.round(d.funnel.asked / d.funnel.opened * 1000) / 10) + '</b> of visitors who opened Ari asked something.');
   }
-  if (hoursSince != null && hoursSince > 48) out.push('<span class="down">No chats logged for ' + Math.round(hoursSince / 24) + ' days.</span> If you\'ve been chatting, the requests aren\'t reaching the worker.');
+  if (!d.meta.guest && hoursSince != null && hoursSince > 48) out.push('<span class="down">No chats logged for ' + Math.round(hoursSince / 24) + ' days.</span> If you\'ve been chatting, the requests aren\'t reaching the worker.');
   $('insights').innerHTML = out.map(x => '<li>' + x + '</li>').join('');
 }
 
@@ -545,35 +650,39 @@ function renderStatus(d, err) {
     '<span><span class="dot ' + (stale ? 'stale' : 'live') + '"></span>last visit <b>' + (m.trackingSince ? ago(m.lastVisitTs) : 'not tracked yet') + '</b></span><span>last chat <b>' + ago(m.lastEventTs) + '</b>' + (m.lastEventTs ? ' (' + ist(m.lastEventTs) + ' IST)' : '') + '</span>' +
     '<span>window <b>' + m.windowStart + ' → ' + m.windowEnd + '</b></span>' +
     '<span>' + m.storedLogs + ' logs stored' + (m.truncated ? ' (showing latest 900)' : '') + '</span>' +
-    '<span>updated ' + new Date(m.generatedAt).toLocaleTimeString('en-IN', { hour12: false }) + ' · auto-refresh 60s</span>';
+    '<span>updated ' + new Date(m.generatedAt).toLocaleTimeString('en-IN', { hour12: false }) + ' · auto-refresh ' + (m.guest ? '5 min' : '60s') + '</span>';
   $('footnote').innerHTML = '<b>Note —</b> data is read live from Cloudflare KV (no caching). Chat logs expire after ' + m.retentionDays + ' days, so 30d is the full history and has no previous period to compare against. Deltas compare against the previous window of equal length. A question counts as answered when the best knowledge-base match scores at least 0.62; chats before 24 Oct used a looser cut-off, so their answer rate is overstated. Topics come from keyword rules in <code>src/worker.js</code>. Page-visit tracking began ' + (m.trackingSince ? ist(m.trackingSince) + ' IST' : 'with this release') + '; earlier periods only have Ari chats. Bots and link-preview crawlers are dropped.';
 }
 
 async function load(r) {
+  if (!mode) return showGate();
   range = r;
   try { localStorage.setItem('ari-range', r); } catch {}
   document.querySelectorAll('.range-toggle span').forEach(s => s.classList.toggle('active', s.dataset.range === r));
   try {
-    const q = '?range=' + r + ($('includeMe').checked ? '&me=1' : '') + '&key=' + encodeURIComponent(key) + '&t=' + Date.now();
+    const q = '?range=' + r + (mode === 'guest' ? '&guest=1' : ($('includeMe').checked ? '&me=1' : '') + '&key=' + encodeURIComponent(key)) + '&t=' + Date.now();
     const res = await fetch(API + q, { cache: 'no-store' });
     if (res.status === 401) {
-      const k = prompt('Dashboard key');
-      if (k) { key = k.trim(); store.set('ari-dash-key', key); return load(r); }
-      throw new Error('dashboard key required');
+      const hadKey = !!key;
+      key = ''; mode = null; store.del('ari-dash-key');
+      return showGate(hadKey ? 'That key didn\'t work.' : '');
     }
     const d = await res.json();
     if (!res.ok || d.error) throw new Error(d.error || 'HTTP ' + res.status);
+    $('gate').classList.remove('show');
+    applyMode();
     renderStatus(d);
     renderInsights(d);
     renderVisitHero(d);
     renderPeople(d);
+    renderContacts(d.contacts, d.meta);
     renderSiteBreakdowns(d.site);
     renderKpis(d);
     renderFunnel(d);
     renderDaily(d.daily);
     renderHourly(d.hourly);
     renderTopics(d.topics);
-    renderQuestions(d.topQuestions);
+    renderQuestions(d.topQuestions, d.meta);
     renderGaps(d.unanswered);
     renderDepth(d.depth);
     renderLatency(d.latency);
@@ -584,8 +693,21 @@ async function load(r) {
     renderStatus(null, e.message || String(e));
   }
   clearTimeout(timer);
-  timer = setTimeout(() => load(range), 60000);
+  timer = setTimeout(() => load(range), mode === 'guest' ? 300000 : 60000);
 }
+
+$('adminForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const k = $('keyInput').value.trim();
+  if (!k) { $('gateErr').textContent = 'Enter the dashboard key.'; return; }
+  key = k; mode = 'admin'; store.set('ari-dash-key', key); $('keyInput').value = '';
+  load(range);
+});
+$('guestBtn').addEventListener('click', () => { mode = 'guest'; load(range); });
+$('switchMode').addEventListener('click', () => {
+  if (mode === 'admin') { key = ''; store.del('ari-dash-key'); }
+  mode = null; showGate();
+});
 
 document.querySelectorAll('.range-toggle span').forEach(s => s.addEventListener('click', () => load(s.dataset.range)));
 $('includeMe').addEventListener('change', () => load(range));
