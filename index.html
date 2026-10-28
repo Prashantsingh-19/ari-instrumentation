@@ -523,7 +523,7 @@ function renderFeedback(fb) {
 }
 
 function renderFeed(items) {
-  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.topScore != null ? '<span class="' + (r.match === 'strong' ? '' : 'down') + '">KB ' + esc(r.match) + ' ' + r.topScore.toFixed(2) + '</span>' : (r.found ? '' : '<span class="down">no KB match</span>')) + (r.sources && r.sources.length ? '<span>from ' + esc(r.sources.map(x => x.split(':')[0]).join(', ')) + '</span>' : '') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + '</div></div>').join('') : empty('No conversations in this window');
+  $('feed').innerHTML = items.length ? items.map(r => '<div class="feed-item"><div class="feed-meta"><span>' + ist(r.ts) + ' IST</span><span>' + ago(r.ts) + '</span><span>visitor ' + esc(r.visitor || '—') + '</span><span>' + esc(r.model) + '</span><span>' + fmtMs(r.latencyMs) + '</span>' + (r.topScore != null ? '<span class="' + (r.match === 'strong' ? '' : 'down') + '">KB ' + esc(r.match) + ' ' + r.topScore.toFixed(2) + '</span>' : (r.found ? '' : '<span class="down">no KB match</span>')) + (r.scoreBefore != null ? '<span title="' + esc((r.rewrites || []).join(' | ')) + '">CRAG ' + r.scoreBefore.toFixed(2) + ' → ' + (r.topScore != null ? r.topScore.toFixed(2) : '—') + '</span>' : '') + (r.sources && r.sources.length ? '<span>from ' + esc(r.sources.map(x => x.split(':')[0]).join(', ')) + '</span>' : '') + '</div><div class="feed-q">' + esc(r.message) + '</div><div class="feed-a">' + esc(r.reply) + '</div></div>').join('') : empty('No conversations in this window');
   document.querySelectorAll('.feed-item').forEach(el => el.addEventListener('click', () => el.classList.toggle('open')));
 }
 
@@ -625,6 +625,7 @@ function renderInsights(d) {
     if (probe) out.push('<b>' + probe.questions + '</b> question' + (probe.questions > 1 ? 's were' : ' was') + ' prompt-injection or jailbreak attempts (' + fmtPct(probe.pct) + '). Check the feed to confirm Ari held up.');
     const hire = d.topics.find(x => x.key === 'hiring');
     if (hire) out.push('<b>' + hire.questions + '</b> hiring/contact question' + (hire.questions > 1 ? 's' : '') + '. This is the recruiter-intent signal.');
+    if (d.crag && d.crag.tried) out.push('Corrective RAG ran on <b>' + d.crag.tried + '</b> weak first match' + (d.crag.tried > 1 ? 'es' : '') + ' and lifted <b>' + d.crag.rescued + '</b> to a strong match by rewriting the question.');
     if (d.meta.guest) { if (k.answerRate != null) out.push('Answer rate is <b>' + fmtPct(k.answerRate) + '</b>, the share of questions with a strong knowledge-base match.'); }
     else if (d.unanswered.length) out.push('<b>' + d.unanswered.reduce((a, q) => a + q.misses, 0) + '</b> questions had no knowledge-base match. Top gap: "' + esc(d.unanswered[0].text.slice(0, 70)) + '".');
     else out.push('Answer rate is <b>' + fmtPct(k.answerRate) + '</b>. Every question found KB context, but that only means retrieval matched something, not that the answer was right.');

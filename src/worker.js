@@ -2,7 +2,8 @@
 // pages.dev origin) and, for backward compatibility, as the standalone workers.dev worker.
 //
 // KV records written by the ari-chatbot worker (shared SESSIONS namespace):
-//   log:<ts>:<sessionId>  {ts, sessionId, visitorId, message, reply, latencyMs, found, model}  TTL 30d
+//   log:<ts>:<sessionId>  {ts, sessionId, visitorId, message, reply, latencyMs, found, model,
+//                          rewrites?, scoreBefore?}  TTL 30d; rewrites = CRAG queries tried on a weak first match
 //   fb:<postId>           {ts, sessionId, visitorId, postId, message, rating, review}          TTL 30d
 //   vid:<visitorId>       '1', re-put on every widget open with TTL 90d (expiration - 90d = last open)
 // Written by this worker (/api/track, beacons from the portfolio page):
@@ -271,7 +272,12 @@ export function aggregate({ logs, fb, visitorOpens, events = [], leads = [], own
     ts: l.ts, session: String(l.sessionId).slice(0, 6), visitor: String(l.visitorId || '').slice(0, 6),
     message: l.message, reply: (l.reply || '').slice(0, 4000), found: answered(l), match: l.match || null, topScore: l.topScore ?? null, sources: (l.sources || []).slice(0, 3),
     model: modelLabels[l.model] || l.model || '—', latencyMs: l.latencyMs,
+    rewrites: l.rewrites || null, scoreBefore: l.scoreBefore ?? null,
   }));
+
+  // Corrective RAG: questions whose first retrieval was weak, and how many the rewrite lifted to a strong match.
+  const tried = cur.filter(l => l.scoreBefore != null);
+  const crag = { tried: tried.length, rescued: tried.filter(l => l.scoreBefore < 0.62 && l.topScore >= 0.62).length, improved: tried.filter(l => l.topScore > l.scoreBefore).length };
 
   const reviews = curFb.slice().sort((a, b) => b.ts - a.ts).filter(f => f.review || f.rating === 'down').slice(0, 8)
     .map(f => ({ ts: f.ts, rating: f.rating, review: f.review || '', question: f.message || '' }));
@@ -291,7 +297,7 @@ export function aggregate({ logs, fb, visitorOpens, events = [], leads = [], own
     funnel: { siteVisitors: site.visitors, opened, asked: askedVisitors.size, returning, newVisitors: curVisitors.size - returning },
     daily, hourly, topics, topQuestions, unanswered, depth,
     latency: { buckets: latencyBuckets, p50: quantile(lat, 0.5), p90: quantile(lat, 0.9), p95: quantile(lat, 0.95), max: lat.length ? lat[lat.length - 1] : null },
-    models, recent,
+    models, recent, crag,
     feedback: { up: curFb.filter(f => f.rating === 'up').length, down: curFb.filter(f => f.rating === 'down').length, reviews },
     // Contacts are kept for a year and listed in full, whatever the selected range.
     contacts: {
